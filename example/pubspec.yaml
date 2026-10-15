@@ -35,6 +35,9 @@ dependencies:
   # and wallet top-up. Resolved from pub.dev.
   wirex_mobile_sdk: ^0.3.7
 
+  # For the "Fetch estimate" helper on the Wallet tab (calls the documented BaaS API).
+  http: ^1.2.2
+
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8

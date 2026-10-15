@@ -41,6 +41,7 @@ const _integration = <_FieldSpec>[
   _FieldSpec('wallet', 'User wallet', 'X-User-Wallet (EOA)'),
   _FieldSpec('cardId', 'Card ID', 'the card Reveal / Collect act on'),
   _FieldSpec('cardholderName', 'Cardholder name', null),
+  _FieldSpec('baasApiUrl', 'BaaS API URL', 'for the Wallet “Fetch estimate” helper'),
 ];
 const _secrets = <_FieldSpec>[
   _FieldSpec('bearer', 'Bearer token', 'getAccessToken — Wirex bearer for the user', secure: true),

@@ -1,7 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:wirex_mobile_sdk/wirex_mobile_sdk.dart';
 
 import 'event_log.dart';
+import 'live_config.dart';
 import 'quote_fields.dart';
 import 'sample_config.dart';
 
@@ -86,6 +90,87 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       quote: (quote as QuoteParseOk).quote,
       config: (provider as TopupParseOk).config,
     );
+  }
+
+  // Prices a top-up with the documented Wirex BaaS API using the bearer on the Config tab, and fills
+  // the estimation id. Pricing a top-up is the partner backend's job; this is a convenience to verify
+  // a token and get a real id without a backend. The SDK only consumes the id.
+  Future<void> _fetchEstimate() async {
+    final String base =
+        LiveConfig.instance.credential('baasApiUrl').trim().replaceAll(RegExp(r'/+$'), '');
+    final String bearer = LiveConfig.instance.credential('bearer');
+    final String chainId = LiveConfig.instance.credential('chainId');
+    final String wallet = LiveConfig.instance.credential('wallet');
+    final String email = LiveConfig.instance.credential('email');
+    if (base.isEmpty || bearer.isEmpty) {
+      setState(() => _note = 'Fetch estimate: set BaaS API URL + bearer on the Config tab');
+      return;
+    }
+    final Map<String, String> headers = <String, String>{
+      'Authorization': 'Bearer $bearer',
+      'X-Chain-Id': chainId,
+      'Content-Type': 'application/json',
+    };
+    if (wallet.isNotEmpty) {
+      headers['X-User-Wallet'] = wallet;
+    } else if (email.isNotEmpty) {
+      headers['X-User-Email'] = email;
+    } else {
+      setState(() => _note = 'Fetch estimate: set a user wallet or email on the Config tab');
+      return;
+    }
+    final String currency = _currency.text.trim().isEmpty ? 'EUR' : _currency.text.trim();
+    final String amount =
+        _destinationAmount.text.trim().isEmpty ? '100.00' : _destinationAmount.text.trim();
+    setState(() => _note = 'fetching estimate…');
+    try {
+      // settlement token for the currency — GET /api/v1/config/tokens (documented).
+      final http.Response toks = await http.get(Uri.parse('$base/api/v1/config/tokens'), headers: headers);
+      if (toks.statusCode != 200) throw 'GET /config/tokens → HTTP ${toks.statusCode}';
+      final dynamic toksBody = jsonDecode(toks.body);
+      final List<dynamic> rows =
+          toksBody is List ? toksBody : (toksBody['data'] as List<dynamic>? ?? <dynamic>[]);
+      final Map<String, dynamic> token = rows.cast<Map<String, dynamic>>().firstWhere(
+            (Map<String, dynamic> t) =>
+                ((t['equivalent_symbols'] as List<dynamic>?)?.contains(currency) ?? false) ||
+                (t['symbol'] as String? ?? '').endsWith(currency),
+            orElse: () => <String, dynamic>{},
+          );
+      if (token.isEmpty) throw 'no settlement token for $currency';
+      final String address =
+          (token['address'] as String?) ?? (token['contract_address'] as String?) ?? '';
+      final int decimals = (token['decimals'] as int?) ?? 18;
+      // price — POST /api/v1/cards/topup/estimate (documented).
+      final http.Response est = await http.post(
+        Uri.parse('$base/api/v1/cards/topup/estimate'),
+        headers: headers,
+        body: jsonEncode(<String, Object?>{
+          'destination_amount': _toBaseUnits(amount, decimals),
+          'destination_token_address': address,
+          'payment_method': 'apple_pay',
+        }),
+      );
+      if (est.statusCode != 200) {
+        throw 'POST /cards/topup/estimate → HTTP ${est.statusCode}: ${est.body}';
+      }
+      final String id = (jsonDecode(est.body) as Map<String, dynamic>)['estimation_id'] as String;
+      setState(() {
+        _estimationId.text = id;
+        _note = 'estimate: $id';
+      });
+    } catch (e) {
+      setState(() => _note = 'estimate failed: $e');
+    }
+  }
+
+  /// display amount (e.g. "100.00") → base-units string (amount * 10^decimals), without float loss.
+  String _toBaseUnits(String amount, int decimals) {
+    final List<String> parts = amount.split('.');
+    final String whole = parts[0];
+    final String frac = parts.length > 1 ? parts[1] : '';
+    final String fracPadded = (frac + '0' * decimals).substring(0, decimals);
+    final String scaled = (whole + fracPadded).replaceFirst(RegExp(r'^0+'), '');
+    return scaled.isEmpty ? '0' : scaled;
   }
 
   void _mount() {
@@ -243,6 +328,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             spacing: 8,
             runSpacing: 8,
             children: <Widget>[
+              OutlinedButton(onPressed: _fetchEstimate, child: const Text('Fetch estimate')),
               FilledButton(onPressed: _mount, child: const Text('Mount checkout')),
               OutlinedButton(onPressed: _rearm, child: const Text('New quote (rearm)')),
               OutlinedButton(onPressed: _unmount, child: const Text('Unmount')),

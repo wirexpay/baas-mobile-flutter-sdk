@@ -45,7 +45,7 @@ class LiveConfig extends ChangeNotifier {
   static final LiveConfig instance = LiveConfig._();
 
   static const List<String> _known = <String>[
-    'environment', 'bearer', 'email', 'wallet', 'cardId', 'actionToken', 'cardholderName', 'chainId',
+    'environment', 'bearer', 'email', 'wallet', 'cardId', 'actionToken', 'cardholderName', 'chainId', 'baasApiUrl',
   ];
 
   /// Bumped whenever a credential / identity value changes, so a screen can rebuild. Separate from
