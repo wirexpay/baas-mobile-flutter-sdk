@@ -17,7 +17,7 @@ Use of the SDK requires an agreement with Wirex. See [LICENSE](LICENSE).
 ## Requirements
 
 - Flutter 3.19 or later.
-- iOS 13 or later (Flutter 3.35 and later itself requires iOS 15); Android 6.0 (API 23) or later.
+- iOS 15 or later; Android 6.0 (API 23) or later.
 
 ## Installation
 

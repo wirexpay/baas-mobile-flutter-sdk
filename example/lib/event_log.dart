@@ -11,8 +11,8 @@ import 'package:wirex_mobile_sdk/wirex_mobile_sdk.dart';
 
 String describeCheckoutEvent(WirexWalletCheckoutEvent event) {
   // An if-chain with a fallback rather than an exhaustive switch: `WirexWalletCheckoutEvent` grows
-  // when the frame grows, and HOSTS must keep a default arm (docs/NATIVE-API.md, "Growth
-  // contract") — the SDK switches exhaustively so a new event reaches every shell; hosts must not.
+  // when the frame grows in later SDK versions, and HOSTS must keep a default arm — the SDK
+  // switches exhaustively so a new event reaches every shell; hosts must not.
   if (event is WirexWalletCheckoutReady) {
     return 'ready — review screen rendered, buttons live';
   }
