@@ -12,6 +12,8 @@ cross the Dart bridge.
 
 Use of the SDK requires an agreement with Wirex. See [LICENSE](LICENSE).
 
+📖 **Integration guide:** https://wirexpay.github.io/baas-mobile-flutter-sdk/ — and a runnable example in [`example/`](example/).
+
 ## Requirements
 
 - Flutter 3.19 or later.
