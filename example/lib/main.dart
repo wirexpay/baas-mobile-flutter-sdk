@@ -344,8 +344,9 @@ class _RevealScreenState extends State<RevealScreen> {
             ),
           const SizedBox(height: 8),
           const Text(
-            'The environment is set on the Config tab (test / production) — a side, never a URL; the '
-            'SDK holds both addresses. Set it there, then Configure.',
+            'Set the Chain ID (and a bearer and card id) on the Config tab, then press Configure. '
+            '`missingChainId` means the environment is chosen but the chain id is still blank — the '
+            'environment (test / production) is a side, never a URL, and the SDK holds both addresses.',
             style: TextStyle(fontSize: 10),
           ),
           const SizedBox(height: 6),
