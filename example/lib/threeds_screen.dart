@@ -5,7 +5,6 @@ import 'package:flutter/services.dart' show PlatformException;
 import 'package:wirex_mobile_sdk/wirex_mobile_sdk.dart';
 
 import 'live_config.dart';
-import 'main.dart' show configuredTestMode;
 
 /// The 3DS step-up, end to end, with the orchestrator URL pasted in.
 ///
@@ -45,8 +44,9 @@ class _ThreeDSScreenState extends State<ThreeDSScreen> {
 
   Future<void> _start() async {
     try {
-      _configured ??= configuredTestMode().then(
-        (testMode) => WirexThreeDS.instance.configure(testMode: testMode ?? true, logging: 'info'),
+      _configured ??= WirexThreeDS.instance.configure(
+        testMode: LiveConfig.instance.isTestMode,
+        logging: 'info',
       );
       await _configured;
       final previous = _session;

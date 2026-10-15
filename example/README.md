@@ -16,27 +16,29 @@ flutter run
 
 The package is resolved from pub.dev (`wirex_mobile_sdk: ^0.3.7` in `pubspec.yaml`).
 
-## The environment
+## Configure at runtime
 
-- Card surfaces: `wirex-card-sdk.json` (`{ "testMode": true }`).
-- Wallet surface: `wirex-wallet-sdk.json` (`{ "environment": "test" }`).
+Nothing is compiled in. The **Config** tab is a per-field editor over `LiveConfig`, the single store
+every surface reads live — type a value and the next call picks it up, no rebuild. It holds:
 
-Both are Flutter assets (declared under `flutter: assets:` in `pubspec.yaml`). The environment is a
-name, never a URL; the SDK maps it onto the hosts it holds.
+- the **environment** (`test` / `production`), which drives the card surfaces' `testMode` — a side,
+  never a URL; the SDK holds both addresses;
+- integration parameters — chain id, user email, user wallet, card id, cardholder name;
+- secrets (bearer, step-up action token), held in memory only and never persisted or logged.
 
-## Enter credentials at runtime
-
-Nothing is compiled in. On the Reveal / Collect screens, paste a JSON subset into the credentials box —
-`{"bearer":"…","cardId":"…","actionToken":"…","cardholderName":"…"}` — a key you omit keeps its value.
+The Wallet surface still resolves its own environment from the `wirex-wallet-sdk.json` asset
+(`{ "environment": "test" }`, declared under `flutter: assets:`).
 
 ## The surfaces
 
 | Tab | What it shows |
 |---|---|
+| **Config** | a per-field editor for the environment, integration parameters and secrets, shared by every surface |
 | **Reveal** | the cardholder's own PAN / expiry / CVV / PIN as native platform views |
 | **Collect** | a sealed form that tokenizes an external funding card at the acquirer |
 | **3DS** | paste a top-up orchestrator URL → the issuer challenge, and the outcome |
 | **Wallet** | the hosted Apple Pay / Google Pay checkout (paste a provider block, build a quote — legacy tokenise flow) |
+| **Appearance** | restyle every sealed surface at once — presets or a pasted token document |
 
 The field contract is the same across the React Native / iOS / Android examples — see
 `../PARTNER-CONFIG.md`.

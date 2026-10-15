@@ -1,36 +1,19 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:wirex_mobile_sdk/wirex_mobile_sdk.dart';
 
 import 'appearance_screen.dart';
 import 'checkout_screen.dart';
 import 'collect_screen.dart';
+import 'config_screen.dart';
 import 'example_config.dart';
 import 'live_config.dart';
 import 'memory_cache.dart';
 import 'threeds_screen.dart';
 
 void main() => runApp(const ExampleApp());
-
-/// Reads the `testMode` flag from this project's `wirex-card-sdk.json`.
-///
-/// The SDK holds the URLs; the file only names one of them. An unknown name makes
-/// `configure` throw `invalid_environment` rather than quietly picking a side.
-/// Returns null when the file cannot be read or parsed, so the caller can say so rather than
-/// throwing into an async gap — which is what left this screen on a spinner forever when the asset
-/// was not declared in `pubspec.yaml`.
-Future<bool?> configuredTestMode() async {
-  try {
-    final raw = await rootBundle.loadString('wirex-card-sdk.json');
-    return (jsonDecode(raw) as Map<String, Object?>)['testMode'] as bool?;
-  } catch (_) {
-    return null;
-  }
-}
 
 /// What a partner application has to implement.
 ///
@@ -113,6 +96,9 @@ class _TabsState extends State<_Tabs> {
     // Appearance is a tab of its own and applies to BOTH surfaces, so the container listens once and
     // rebuilds them together. The native examples post a notification for the same reason.
     LiveConfig.instance.addListener(_restyle);
+    // A value typed on the Config tab: reconfigure collect so the fresh environment / chainId /
+    // bearer take effect. Reveal and 3DS observe the same revision for themselves.
+    LiveConfig.instance.credentialsRevision.addListener(_configureCollect);
     _configureCollect();
     _bootstrapWallet();
   }
@@ -133,6 +119,7 @@ class _TabsState extends State<_Tabs> {
   @override
   void dispose() {
     LiveConfig.instance.removeListener(_restyle);
+    LiveConfig.instance.credentialsRevision.removeListener(_configureCollect);
     _walletCache.dispose();
     super.dispose();
   }
@@ -160,10 +147,9 @@ class _TabsState extends State<_Tabs> {
   /// The collect SDK is configured separately from reveal's, because they are separate SDKs that
   /// happen to share a credential source. A partner integrating one calls one of these.
   Future<void> _configureCollect() async {
-    final testMode = await configuredTestMode() ?? true;
     try {
       await WirexCollect.configure(
-        testMode: testMode,
+        testMode: LiveConfig.instance.isTestMode,
         chainId: LiveConfig.instance.credential('chainId'),
         // The same token the reveal screen's provider mints. Collect asks only for this one: entering
         // a card the user is holding is not an action token-gated action.
@@ -179,10 +165,11 @@ class _TabsState extends State<_Tabs> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       title: Text(switch (_index) {
-        0 => 'Reveal — Flutter',
-        1 => 'Collect — Flutter',
-        2 => '3DS — Flutter',
-        3 => 'Wallet — Flutter',
+        0 => 'Config — Flutter',
+        1 => 'Reveal — Flutter',
+        2 => 'Collect — Flutter',
+        3 => '3DS — Flutter',
+        4 => 'Wallet — Flutter',
         _ => 'Appearance — Flutter',
       }),
     ),
@@ -200,6 +187,7 @@ class _TabsState extends State<_Tabs> {
       // that surface picked up a restyle immediately and this one did not — the difference that
       // located this.
       children: <Widget>[
+        const ConfigScreen(),
         RevealScreen(),
         CollectScreen(configured: _collectConfigured),
         ThreeDSScreen(),
@@ -213,6 +201,7 @@ class _TabsState extends State<_Tabs> {
         setState(() => _index = index);
       },
       destinations: const <NavigationDestination>[
+        NavigationDestination(icon: Icon(Icons.tune), label: 'Config'),
         NavigationDestination(icon: Icon(Icons.credit_card), label: 'Reveal'),
         NavigationDestination(icon: Icon(Icons.keyboard), label: 'Collect'),
         NavigationDestination(icon: Icon(Icons.verified_user), label: '3DS'),
@@ -249,12 +238,6 @@ class _RevealScreenState extends State<RevealScreen> {
 
   StubCredentials? _credentials;
 
-  final TextEditingController _credentialsJson = TextEditingController(
-    text: '{ "actionToken": "" }',
-  );
-  final TextEditingController _appearanceJson = TextEditingController(
-    text: '{ "colorText": "#7C3AED", "borderRadius": 14, "fontSizeBase": 20 }',
-  );
   WirexRevealSession? _session;
   /// Null until the session has published one.
   ///
@@ -305,12 +288,7 @@ class _RevealScreenState extends State<RevealScreen> {
   bool get _masked => fields.any((field) => _maskedByField[field] != false);
   bool _configuring = false;
   String? _configureError;
-  bool _testMode = true;
   bool _protectionActive = false;
-
-  final TextEditingController _appearanceDarkJson = TextEditingController(
-    text: '{ "colorText": "#F9FAFB", "surfaceColor": "#111827" }',
-  );
   String _note = '';
 
   /// What the live session was built from, so a re-apply can tell whether it is stale.
@@ -319,14 +297,18 @@ class _RevealScreenState extends State<RevealScreen> {
   @override
   void initState() {
     super.initState();
+    // A value typed on the Config tab: rebuild the session only if the card it captured changed.
+    LiveConfig.instance.credentialsRevision.addListener(_onCredentialsChanged);
     _configure();
+  }
+
+  void _onCredentialsChanged() {
+    if (_session != null) unawaited(_recreateSessionIfIdentityChanged());
   }
 
   @override
   void dispose() {
-    _credentialsJson.dispose();
-    _appearanceJson.dispose();
-    _appearanceDarkJson.dispose();
+    LiveConfig.instance.credentialsRevision.removeListener(_onCredentialsChanged);
     _session?.destroy();
     super.dispose();
   }
@@ -362,68 +344,21 @@ class _RevealScreenState extends State<RevealScreen> {
             ),
           const SizedBox(height: 8),
           const Text(
-            'A SIDE, not a URL — the SDK holds the addresses and there are two of them. Normally '
-            'read from wirex-card-sdk.json; switch it here if that file could not be read.',
+            'The environment is set on the Config tab (test / production) — a side, never a URL; the '
+            'SDK holds both addresses. Set it there, then Configure.',
             style: TextStyle(fontSize: 10),
           ),
           const SizedBox(height: 6),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  title: Text(
-                    _testMode ? 'testMode: on' : 'testMode: off (live)',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  value: _testMode,
-                  onChanged: (bool next) => setState(() => _testMode = next),
-                ),
-              ),
-              const SizedBox(width: 8),
-              FilledButton(
-                onPressed: _configuring
-                    ? null
-                    : () => _configure(testModeOverride: _testMode),
-                child: const Text('Configure'),
-              ),
-            ],
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton(
+              onPressed: _configuring ? null : _configure,
+              child: const Text('Configure'),
+            ),
           ),
         ],
       ),
     );
-  }
-
-  /// A collapsed-by-default panel. This is operator plumbing; the point of the screen is the rows.
-  Widget _panel({required String title, required List<Widget> children}) => ExpansionTile(
-    title: Text(title, style: const TextStyle(fontSize: 14)),
-    tilePadding: EdgeInsets.zero,
-    childrenPadding: const EdgeInsets.only(bottom: 12),
-    children: children,
-  );
-
-  Widget _jsonField(TextEditingController controller) => TextField(
-    controller: controller,
-    maxLines: 4,
-    style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
-    decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
-  );
-
-  void _report(
-    ConfigOutcome outcome, {
-    required String subject,
-    bool thenRebuildIfIdentityChanged = false,
-  }) {
-    setState(() {
-      _note = switch (outcome) {
-        ConfigMerged(:final summary) => summary,
-        ConfigRejected(:final reason) => '$subject: $reason',
-      };
-    });
-    if (thenRebuildIfIdentityChanged && outcome is ConfigMerged) {
-      unawaited(_recreateSessionIfIdentityChanged());
-    }
   }
 
   /// Rebuilds the session when a credential the session CAPTURED has changed.
@@ -445,24 +380,17 @@ class _RevealScreenState extends State<RevealScreen> {
   /// Everything is caught and surfaced. An uncaught failure leaves the screen on a spinner with no
   /// way forward — the worst mode available, because it is indistinguishable from a slow network.
   /// The panels stay reachable instead, and the side can be switched by hand.
-  Future<void> _configure({bool? testModeOverride}) async {
+  Future<void> _configure() async {
     setState(() {
       _configureError = null;
       _configuring = true;
     });
     try {
-      final testMode = testModeOverride ?? await configuredTestMode();
-      if (testMode == null) {
-        throw StateError(
-          'wirex-card-sdk.json is missing, unreadable, or carries no testMode flag. '
-          'Type one below and press Configure.',
-        );
-      }
       final credentials = StubCredentials();
       _credentials = credentials;
 
       await WirexReveal.instance.configure(
-        testMode: testMode,
+        testMode: LiveConfig.instance.isTestMode,
         chainId: LiveConfig.instance.credential('chainId'),
         credentials: credentials,
       );
@@ -613,41 +541,7 @@ class _RevealScreenState extends State<RevealScreen> {
             ],
           ),
 
-          // Paste any subset of the keys. Absent keys keep their current values, so an
-          // expired `actionToken` is replaced by pasting only that one — no rebuild, nothing
-          // else disturbed.
-          _panel(
-            title: 'Credentials (JSON)',
-            children: <Widget>[
-              const Text(
-                'keys: bearer · email · wallet · cardId · actionToken · cardholderName — merged, absent kept',
-                style: TextStyle(fontSize: 10),
-              ),
-              const SizedBox(height: 8),
-              _jsonField(_credentialsJson),
-              const SizedBox(height: 8),
-              Row(
-                children: <Widget>[
-                  FilledButton(
-                    onPressed: () => _report(
-                      LiveConfig.instance.applyCredentials(_credentialsJson.text),
-                      subject: 'credentials',
-                      // A session captures `cardId` and `cardholderName` at creation; only
-                      // the bearer and action-token token are read lazily. Without this a
-                      // corrected card id never reached the session.
-                      thenRebuildIfIdentityChanged: true,
-                    ),
-                    child: const Text('Apply credentials'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                LiveConfig.instance.credentialsStatus(),
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 10),
-              ),
-            ],
-          ),
+          // Credentials and identity are entered on the Config tab now, shared by every surface.
         ],
       ),
     );

@@ -45,8 +45,13 @@ class LiveConfig extends ChangeNotifier {
   static final LiveConfig instance = LiveConfig._();
 
   static const List<String> _known = <String>[
-    'bearer', 'email', 'wallet', 'cardId', 'actionToken', 'cardholderName', 'chainId',
+    'environment', 'bearer', 'email', 'wallet', 'cardId', 'actionToken', 'cardholderName', 'chainId',
   ];
+
+  /// Bumped whenever a credential / identity value changes, so a screen can rebuild. Separate from
+  /// the `ChangeNotifier` this class uses for appearance: a credential change may have to rebuild a
+  /// session or reconfigure a surface, an appearance change must never do either.
+  final ValueNotifier<int> credentialsRevision = ValueNotifier<int>(0);
 
   final Map<String, String> _credentials = <String, String>{
     // `--dart-define` is the seed, so a scripted run needs no typing.
@@ -71,6 +76,33 @@ class LiveConfig extends ChangeNotifier {
   final Map<String, Object?> _darkTokens = <String, Object?>{};
 
   String credential(String key) => _credentials[key] ?? '';
+
+  /// Writes a single key — the per-field Config tab's edit. An EMPTY value CLEARS the key, matching
+  /// [applyCredentials]. `notify` is false while a field is mid-edit (every keystroke) and true when
+  /// it loses focus, so a screen rebuilds once on blur rather than on every character.
+  void setCredential(String key, String value, {bool notify = true}) {
+    if (value.isEmpty) {
+      _credentials.remove(key);
+    } else {
+      _credentials[key] = value;
+    }
+    if (notify) credentialsRevision.value++;
+  }
+
+  /// The SDK environment NAME the Config tab selected, defaulting to `test`. A name, never a URL.
+  String get environment {
+    final value = credential('environment');
+    return value.isEmpty ? 'test' : value;
+  }
+
+  /// `test` everywhere but the production name — mirrors `exampleConfig.ts`.
+  bool get isTestMode => environment != 'production';
+
+  /// Clears every credential / identity value back to empty (environment falls back to `test`).
+  void resetCredentials() {
+    _credentials.clear();
+    credentialsRevision.value++;
+  }
 
   ConfigOutcome applyCredentials(String json) {
     final parsed = _parse(json);
