@@ -1,0 +1,9 @@
+// `flutter create` gives the Runner target only Debug and Release xcconfigs, and points its
+// PROFILE build configuration at Release.xcconfig — which includes `Pods-Runner.release.xcconfig`.
+// So `flutter build ios --profile` silently linked against the release pod settings, and CocoaPods
+// warned about it on every `pod install`.
+//
+// This file is the missing third one. The Podfile's post_install hook repoints the Profile
+// configuration at it, so no hand-editing of Runner.xcodeproj is involved.
+#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"
+#include "Generated.xcconfig"

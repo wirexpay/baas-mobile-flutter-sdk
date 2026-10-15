@@ -1,0 +1,76 @@
+# The EXAMPLE's floor, and it is Flutter's rather than the SDK's.
+#
+# The plugins and the native SDK support iOS 13.0 and still declare it. Flutter does not: since 3.35
+# its own `Flutter.podspec` declares `ios.deployment_target = '15.0'`, and CocoaPods refuses to
+# resolve an app below the engine it has to link. `pod install` fails with "Specs satisfying the
+# `Flutter` dependency were found, but they required a higher minimum deployment target", which names
+# the engine and not the number to change.
+#
+# So a Flutter partner's floor is whichever is higher of ours and their Flutter's — 15.0 today. A
+# UIKit partner taking the native SDK directly is still on 13.0. README.md says both.
+platform :ios, '15.0'
+
+# CocoaPods analytics sends network stats synchronously affecting flutter build latency.
+ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+project 'Runner', {
+  'Debug' => :debug,
+  'Profile' => :release,
+  'Release' => :release,
+}
+
+def flutter_root
+  generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
+  unless File.exist?(generated_xcode_build_settings_path)
+    raise "#{generated_xcode_build_settings_path} must exist. If you're running pod install manually, make sure flutter pub get is executed first"
+  end
+
+  File.foreach(generated_xcode_build_settings_path) do |line|
+    matches = line.match(/FLUTTER_ROOT\=(.*)/)
+    return matches[1].strip if matches
+  end
+  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}. Try deleting Generated.xcconfig, then run flutter pub get"
+end
+
+require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
+
+flutter_ios_podfile_setup
+
+target 'Runner' do
+  use_frameworks!
+
+  # The native WirexMobileSDK pod is a dependency of the Wirex Flutter plugins' podspecs and is
+  # resolved automatically from the CocoaPods trunk — nothing to declare here.
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  target 'RunnerTests' do
+    inherit! :search_paths
+  end
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+  end
+
+  # Repoint the Runner target's PROFILE configuration at Flutter/Profile.xcconfig.
+  #
+  # `flutter create` gives Runner only two xcconfigs and aims Profile at the Release one, so a
+  # --profile build picked up `Pods-Runner.release.xcconfig` instead of the profile variant that
+  # CocoaPods generates. Doing it here rather than by editing the pbxproj keeps the change
+  # declarative and idempotent — `pod install` reapplies it, and there is no generated project file
+  # to hand-merge.
+  installer.aggregate_targets.each do |aggregate|
+    project = aggregate.user_project
+    next if project.nil?
+
+    reference = project.files.find { |file| file.path == 'Flutter/Profile.xcconfig' } ||
+                project.new_file('Flutter/Profile.xcconfig')
+
+    project.targets.each do |target|
+      next unless target.name == 'Runner'
+      configuration = target.build_configurations.find { |config| config.name == 'Profile' }
+      configuration.base_configuration_reference = reference if configuration
+    end
+    project.save
+  end
+end
