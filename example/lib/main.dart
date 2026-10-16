@@ -288,6 +288,10 @@ class _RevealScreenState extends State<RevealScreen> {
   bool get _masked => fields.any((field) => _maskedByField[field] != false);
   bool _configuring = false;
   String? _configureError;
+  /// The testMode + chain id the SDK was last configured with. Both are read at CONFIGURE time, so a
+  /// chain id typed on the Config tab after this screen appeared must reconfigure, not just rebuild
+  /// the session.
+  String _lastConfigKey = '';
   bool _protectionActive = false;
   String _note = '';
 
@@ -303,7 +307,14 @@ class _RevealScreenState extends State<RevealScreen> {
   }
 
   void _onCredentialsChanged() {
-    if (_session != null) unawaited(_recreateSessionIfIdentityChanged());
+    final key = '${LiveConfig.instance.isTestMode}|${LiveConfig.instance.credential('chainId')}';
+    // The chain id / environment are read at configure time: a change there (or recovering from a
+    // failed configure, when there is no session) must reconfigure, not just rebuild the session.
+    if (key != _lastConfigKey || _session == null) {
+      unawaited(_configure());
+    } else {
+      unawaited(_recreateSessionIfIdentityChanged());
+    }
   }
 
   @override
@@ -395,6 +406,7 @@ class _RevealScreenState extends State<RevealScreen> {
         chainId: LiveConfig.instance.credential('chainId'),
         credentials: credentials,
       );
+      _lastConfigKey = '${LiveConfig.instance.isTestMode}|${LiveConfig.instance.credential('chainId')}';
       await _createSession();
     } catch (error) {
       if (mounted) setState(() => _configureError = '$error');

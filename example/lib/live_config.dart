@@ -56,19 +56,19 @@ class LiveConfig extends ChangeNotifier {
   final Map<String, String> _credentials = <String, String>{
     // `--dart-define` is the seed, so a scripted run needs no typing.
     if (const String.fromEnvironment('WIREX_BEARER').isNotEmpty)
-      'bearer': String.fromEnvironment('WIREX_BEARER'),
+      'bearer': const String.fromEnvironment('WIREX_BEARER'),
     if (const String.fromEnvironment('WIREX_EMAIL').isNotEmpty)
-      'email': String.fromEnvironment('WIREX_EMAIL'),
+      'email': const String.fromEnvironment('WIREX_EMAIL'),
     if (const String.fromEnvironment('WIREX_WALLET').isNotEmpty)
-      'wallet': String.fromEnvironment('WIREX_WALLET'),
+      'wallet': const String.fromEnvironment('WIREX_WALLET'),
     if (const String.fromEnvironment('WIREX_CARD_ID').isNotEmpty)
-      'cardId': String.fromEnvironment('WIREX_CARD_ID'),
+      'cardId': const String.fromEnvironment('WIREX_CARD_ID'),
     if (const String.fromEnvironment('WIREX_ACTION_TOKEN').isNotEmpty)
-      'actionToken': String.fromEnvironment('WIREX_ACTION_TOKEN'),
+      'actionToken': const String.fromEnvironment('WIREX_ACTION_TOKEN'),
     if (const String.fromEnvironment('WIREX_CARDHOLDER_NAME').isNotEmpty)
-      'cardholderName': String.fromEnvironment('WIREX_CARDHOLDER_NAME'),
+      'cardholderName': const String.fromEnvironment('WIREX_CARDHOLDER_NAME'),
     if (const String.fromEnvironment('WIREX_CHAIN_ID').isNotEmpty)
-      'chainId': String.fromEnvironment('WIREX_CHAIN_ID'),
+      'chainId': const String.fromEnvironment('WIREX_CHAIN_ID'),
   };
 
   /// The example keeps one map per mode and hands over the one that matches.
