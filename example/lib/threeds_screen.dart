@@ -25,6 +25,7 @@ class _ThreeDSScreenState extends State<ThreeDSScreen> {
 
   final _url = TextEditingController(text: _launchUrl);
   Future<void>? _configured;
+  bool? _configuredTestMode;
   WirexThreeDSSession? _session;
   String _status = 'no session';
   bool _settled = false;
@@ -44,10 +45,12 @@ class _ThreeDSScreenState extends State<ThreeDSScreen> {
 
   Future<void> _start() async {
     try {
-      _configured ??= WirexThreeDS.instance.configure(
-        testMode: LiveConfig.instance.isTestMode,
-        logging: 'info',
-      );
+      // `testMode` is read at configure time: reconfigure when the Config tab's environment changed.
+      final bool testMode = LiveConfig.instance.isTestMode;
+      if (_configured == null || _configuredTestMode != testMode) {
+        _configuredTestMode = testMode;
+        _configured = WirexThreeDS.instance.configure(testMode: testMode, logging: 'info');
+      }
       await _configured;
       final previous = _session;
       final session = await WirexThreeDS.instance.createSession(_url.text);
