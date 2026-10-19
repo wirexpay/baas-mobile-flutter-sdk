@@ -418,7 +418,7 @@ Authenticated calls carry `Authorization: Bearer`, `X-Chain-Id` and one identity
 
 ## 11. The example app
 
-[`example/`](example/) is a Flutter app that exercises all four surfaces against your own data; nothing is compiled in. Run `flutter pub get` and `flutter run`; it resolves the SDK from pub.dev. Paste the integration JSON (`chainId`, `bearer`, `actionToken`, `cardId`, identity) on the Reveal screen; the Wallet screen takes an estimation id and the provider block. The field list is in [`PARTNER-CONFIG.md`](PARTNER-CONFIG.md). Reveal values render blank on the iOS Simulator and the Pay sheet needs a real device.
+[`example/`](example/) is a Flutter app that exercises all four surfaces against your own data; nothing is compiled in. Run `flutter pub get` and `flutter run`; it resolves the SDK from pub.dev. The **Config** tab is a per-field editor for the environment, the integration parameters (chain id, identity, card id, cardholder name) and the secrets (bearer, step-up action token); values live in memory only, and every screen reads them live. The **Wallet** screen takes an estimation id and the provider block, and its **Fetch estimate** button prices a top-up through the BaaS API with your bearer, so you can get a real estimation id without standing up a backend. The **Appearance** tab restyles every sealed surface at once. The field list is in [`PARTNER-CONFIG.md`](PARTNER-CONFIG.md). Reveal values render blank on the iOS Simulator and the Pay sheet needs a real device.
 
 ## 12. Patterns from a production integration
 
