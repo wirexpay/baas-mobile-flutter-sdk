@@ -26,8 +26,7 @@ every surface reads live — type a value and the next call picks it up, no rebu
 - integration parameters — chain id, user email, user wallet, card id, cardholder name;
 - secrets (bearer, step-up action token), held in memory only and never persisted or logged.
 
-The Wallet surface still resolves its own environment from the `wirex-wallet-sdk.json` asset
-(`{ "environment": "test" }`, declared under `flutter: assets:`).
+The Wallet surface takes the same environment name from the Config tab.
 
 ## The surfaces
 

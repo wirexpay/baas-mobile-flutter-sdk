@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -102,8 +103,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final String chainId = LiveConfig.instance.credential('chainId');
     final String wallet = LiveConfig.instance.credential('wallet');
     final String email = LiveConfig.instance.credential('email');
-    if (base.isEmpty || bearer.isEmpty) {
-      setState(() => _note = 'Fetch estimate: set BaaS API URL + bearer on the Config tab');
+    // https only: the bearer goes to whatever is typed here. The chain id is required by the API.
+    if (!base.startsWith('https://') || bearer.isEmpty || chainId.isEmpty) {
+      setState(() => _note = 'Fetch estimate: set an https BaaS API URL, a bearer and the chain id on the Config tab');
       return;
     }
     final Map<String, String> headers = <String, String>{
@@ -147,7 +149,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         body: jsonEncode(<String, Object?>{
           'destination_amount': _toBaseUnits(amount, decimals),
           'destination_token_address': address,
-          'payment_method': 'apple_pay',
+          'payment_method': Platform.isIOS ? 'apple_pay' : 'google_pay',
         }),
       );
       if (est.statusCode != 200) {

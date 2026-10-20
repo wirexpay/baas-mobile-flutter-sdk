@@ -98,12 +98,26 @@ class _TabsState extends State<_Tabs> {
     LiveConfig.instance.addListener(_restyle);
     // A value typed on the Config tab: reconfigure collect so the fresh environment / chainId /
     // bearer take effect. Reveal and 3DS observe the same revision for themselves.
-    LiveConfig.instance.credentialsRevision.addListener(_configureCollect);
+    LiveConfig.instance.credentialsRevision.addListener(_onCredentialsChanged);
     _configureCollect();
     _bootstrapWallet();
   }
 
+  String _collectConfigKey = '';
+  String _walletEnvironment = '';
+
+  /// A value typed on the Config tab. Collect is reconfigured only when the environment or chain id
+  /// changed: the bearer is read per call, and a reconfigure would clear a half-typed card. The
+  /// wallet is re-bootstrapped only when the environment changed.
+  void _onCredentialsChanged() {
+    final String key = '${LiveConfig.instance.isTestMode}|${LiveConfig.instance.credential('chainId')}';
+    if (key != _collectConfigKey) unawaited(_configureCollect());
+    if (LiveConfig.instance.environment != _walletEnvironment) unawaited(_bootstrapWallet());
+  }
+
   Future<void> _bootstrapWallet() async {
+    _walletEnvironment = LiveConfig.instance.environment;
+    if (mounted) setState(() { _walletConfig = null; _walletError = null; });
     final ExampleBootstrap result = await bootstrap(cache: _walletCache);
     if (!mounted) return;
     setState(() {
@@ -119,7 +133,7 @@ class _TabsState extends State<_Tabs> {
   @override
   void dispose() {
     LiveConfig.instance.removeListener(_restyle);
-    LiveConfig.instance.credentialsRevision.removeListener(_configureCollect);
+    LiveConfig.instance.credentialsRevision.removeListener(_onCredentialsChanged);
     _walletCache.dispose();
     super.dispose();
   }
@@ -132,7 +146,7 @@ class _TabsState extends State<_Tabs> {
   /// reason it could not (rendered, never a spinner forever).
   Widget _walletTab() {
     final config = _walletConfig;
-    if (config != null) return CheckoutScreen(config: config);
+    if (config != null) return CheckoutScreen(key: ValueKey<String>(config.environment.name), config: config);
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Center(
@@ -147,6 +161,7 @@ class _TabsState extends State<_Tabs> {
   /// The collect SDK is configured separately from reveal's, because they are separate SDKs that
   /// happen to share a credential source. A partner integrating one calls one of these.
   Future<void> _configureCollect() async {
+    _collectConfigKey = '${LiveConfig.instance.isTestMode}|${LiveConfig.instance.credential('chainId')}';
     try {
       await WirexCollect.configure(
         testMode: LiveConfig.instance.isTestMode,

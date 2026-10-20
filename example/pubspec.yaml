@@ -64,13 +64,6 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # The SDK config this project ships. Without this declaration `rootBundle.loadString` throws at
-  # startup and the screen sits on a spinner forever — the file exists on disk, which is exactly
-  # what makes the omission easy to miss.
-  assets:
-    - wirex-card-sdk.json
-    - wirex-wallet-sdk.json
-
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

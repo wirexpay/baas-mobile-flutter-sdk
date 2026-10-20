@@ -54,17 +54,15 @@ class LiveConfig extends ChangeNotifier {
   final ValueNotifier<int> credentialsRevision = ValueNotifier<int>(0);
 
   final Map<String, String> _credentials = <String, String>{
-    // `--dart-define` is the seed, so a scripted run needs no typing.
-    if (const String.fromEnvironment('WIREX_BEARER').isNotEmpty)
-      'bearer': const String.fromEnvironment('WIREX_BEARER'),
+    // `--dart-define` seeds the NON-SECRET values, so a scripted run needs less typing. Secrets are
+    // never seeded this way: a define is compiled into the binary, and a build carrying a bearer
+    // would hand it to whoever gets the file. Paste them on the Config tab instead.
     if (const String.fromEnvironment('WIREX_EMAIL').isNotEmpty)
       'email': const String.fromEnvironment('WIREX_EMAIL'),
     if (const String.fromEnvironment('WIREX_WALLET').isNotEmpty)
       'wallet': const String.fromEnvironment('WIREX_WALLET'),
     if (const String.fromEnvironment('WIREX_CARD_ID').isNotEmpty)
       'cardId': const String.fromEnvironment('WIREX_CARD_ID'),
-    if (const String.fromEnvironment('WIREX_ACTION_TOKEN').isNotEmpty)
-      'actionToken': const String.fromEnvironment('WIREX_ACTION_TOKEN'),
     if (const String.fromEnvironment('WIREX_CARDHOLDER_NAME').isNotEmpty)
       'cardholderName': const String.fromEnvironment('WIREX_CARDHOLDER_NAME'),
     if (const String.fromEnvironment('WIREX_CHAIN_ID').isNotEmpty)
