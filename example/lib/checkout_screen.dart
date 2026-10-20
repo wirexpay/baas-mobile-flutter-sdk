@@ -1,14 +1,22 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
 
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import 'package:wirex_mobile_sdk/wirex_mobile_sdk.dart';
 
 import 'event_log.dart';
 import 'live_config.dart';
 import 'quote_fields.dart';
 import 'sample_config.dart';
+
+/// Demo App Link the Android checkout returns to. A real host uses its own verified domain
+/// (assetlinks.json) so the tab hands straight back to the app; this declares the example's demo host
+/// (see android/app/src/main/AndroidManifest.xml).
+const String _walletReturnUrl = 'https://wirex-sdk-example.wirexapp.tech/wallet-return';
 
 /// The Checkout tab: provider config in, quote in, `WirexWalletCheckoutView` mounted, every event
 /// logged. What a partner's top-up screen does, minus the estimate and execute calls — the SDK
@@ -32,6 +40,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final TextEditingController _currency = TextEditingController(text: defaultCurrency);
   final TextEditingController _ttlSeconds = TextEditingController(text: defaultTtlSeconds);
 
+  // Android only: the checkout opens top-level in a Chrome Custom Tab, so the host supplies a
+  // backend-minted checkout token and the estimate's provider name, and catches the return App Link.
+  final TextEditingController _checkoutToken = TextEditingController();
+  final TextEditingController _provider = TextEditingController(text: 'nuvei');
+  StreamSubscription<Uri>? _linkSub;
+
   /// Never in a release build: it is the one switch that makes the payment web view inspectable.
   bool _debug = false;
   bool _branding = true;
@@ -52,7 +66,27 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String _note = '';
 
   @override
+  void initState() {
+    super.initState();
+    // Android: the Custom Tab returns through an https App Link; listen for it and read the outcome.
+    if (Platform.isAndroid) {
+      final AppLinks links = AppLinks();
+      _linkSub = links.uriLinkStream.listen((Uri uri) {
+        final String url = uri.toString();
+        if (!WirexWalletReturnLink.matches(url, _walletReturnUrl)) return;
+        final WirexWalletReturnLink back = WirexWalletReturnLink.parse(url);
+        if (!mounted) return;
+        setState(() {
+          _events.add(_stamp('return — estimationId=${back.estimationId} outcome=${back.outcome?.wire ?? 'unknown'}'));
+        });
+        closeInAppWebView();
+      });
+    }
+  }
+
+  @override
   void dispose() {
+    _linkSub?.cancel();
     _providerJson.dispose();
     _estimationId.dispose();
     _sourceAmount.dispose();
@@ -60,7 +94,47 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     _fee.dispose();
     _currency.dispose();
     _ttlSeconds.dispose();
+    _checkoutToken.dispose();
+    _provider.dispose();
     super.dispose();
+  }
+
+  /// Android: build the launch URL and open the checkout in a Chrome Custom Tab. Unlike the inline
+  /// view, the launch URL carries only the quote + provider NAME — the hosted page resolves the
+  /// provider block itself — so no provider-config JSON is needed here.
+  Future<void> _launchCustomTab() async {
+    final QuoteParse quoteParse = parseQuoteFields(
+      estimationId: _estimationId.text,
+      sourceAmount: _sourceAmount.text,
+      currency: _currency.text,
+      destinationAmount: _destinationAmount.text,
+      fee: _fee.text,
+      ttlSeconds: _ttlSeconds.text,
+    );
+    if (quoteParse is QuoteParseError) {
+      setState(() => _note = 'quote: ${quoteParse.message}');
+      return;
+    }
+    final String token = _checkoutToken.text.trim();
+    final String provider = _provider.text.trim();
+    if (token.isEmpty || provider.isEmpty) {
+      setState(() => _note = 'Custom Tab: set a checkout token and the estimate\'s provider name');
+      return;
+    }
+    final String url = await WirexWalletLaunch.buildUrl(
+      widget.config,
+      WirexWalletLaunchParams(
+        checkoutToken: token,
+        quote: (quoteParse as QuoteParseOk).quote,
+        provider: provider,
+        returnUrl: _walletReturnUrl,
+      ),
+    );
+    if (!mounted) return;
+    // The fragment carries the token — log only the part before it.
+    setState(() => _events.add(_stamp('opening Custom Tab: ${url.split('#').first}#<redacted>')));
+    final bool ok = await launchUrl(Uri.parse(url), mode: LaunchMode.inAppBrowserView);
+    if (!ok && mounted) setState(() => _note = 'could not open a Custom Tab on this device');
   }
 
   String _stamp(String line) {
@@ -294,54 +368,78 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
             ],
           ),
-          SwitchListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            title: const Text('debug', style: TextStyle(fontSize: 13)),
-            subtitle: const Text(
-              'frame console relay + inspectable web view. NEVER in a release build.',
-              style: TextStyle(fontSize: 10),
+          // Android opens the checkout in a Chrome Custom Tab — Google Pay validates the hosting app's
+          // package, which a WebView cannot satisfy. iOS keeps the inline WirexWalletCheckoutView below.
+          if (Platform.isAndroid) ...<Widget>[
+            const SizedBox(height: 8),
+            const Text(
+              'Android opens the checkout top-level in a Chrome Custom Tab (not a WebView). Provide a '
+              'backend-minted checkout token and the estimate\'s provider name; the tab returns through '
+              'the https App Link.',
+              style: TextStyle(fontSize: 11),
             ),
-            value: _debug,
-            onChanged: (bool value) => setState(() => _debug = value),
-          ),
-          SwitchListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            title: const Text('branding — partner name in the processing disclosure',
-                style: TextStyle(fontSize: 13)),
-            value: _branding,
-            onChanged: (bool value) => setState(() => _branding = value),
-          ),
-          SwitchListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            title: const Text('buttons — send explicit presets', style: TextStyle(fontSize: 13)),
-            subtitle: const Text(
-              'off = sent ABSENT, so the frame applies its own defaults — no binding substitutes '
-              'one of its own.',
-              style: TextStyle(fontSize: 10),
+            const SizedBox(height: 8),
+            _field('checkout token (minted by your backend)', _checkoutToken),
+            _field('provider (estimate\'s provider name)', _provider),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: <Widget>[
+                OutlinedButton(onPressed: _fetchEstimate, child: const Text('Fetch estimate')),
+                FilledButton(onPressed: _launchCustomTab, child: const Text('Launch in Custom Tab')),
+              ],
             ),
-            value: _buttons,
-            onChanged: (bool value) => setState(() => _buttons = value),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: <Widget>[
-              OutlinedButton(onPressed: _fetchEstimate, child: const Text('Fetch estimate')),
-              FilledButton(onPressed: _mount, child: const Text('Mount checkout')),
-              OutlinedButton(onPressed: _rearm, child: const Text('New quote (rearm)')),
-              OutlinedButton(onPressed: _unmount, child: const Text('Unmount')),
-            ],
-          ),
+          ] else ...<Widget>[
+            SwitchListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('debug', style: TextStyle(fontSize: 13)),
+              subtitle: const Text(
+                'frame console relay + inspectable web view. NEVER in a release build.',
+                style: TextStyle(fontSize: 10),
+              ),
+              value: _debug,
+              onChanged: (bool value) => setState(() => _debug = value),
+            ),
+            SwitchListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('branding — partner name in the processing disclosure',
+                  style: TextStyle(fontSize: 13)),
+              value: _branding,
+              onChanged: (bool value) => setState(() => _branding = value),
+            ),
+            SwitchListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('buttons — send explicit presets', style: TextStyle(fontSize: 13)),
+              subtitle: const Text(
+                'off = sent ABSENT, so the frame applies its own defaults — no binding substitutes '
+                'one of its own.',
+                style: TextStyle(fontSize: 10),
+              ),
+              value: _buttons,
+              onChanged: (bool value) => setState(() => _buttons = value),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: <Widget>[
+                OutlinedButton(onPressed: _fetchEstimate, child: const Text('Fetch estimate')),
+                FilledButton(onPressed: _mount, child: const Text('Mount checkout')),
+                OutlinedButton(onPressed: _rearm, child: const Text('New quote (rearm)')),
+                OutlinedButton(onPressed: _unmount, child: const Text('Unmount')),
+              ],
+            ),
+          ],
           if (_note.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(_note, style: const TextStyle(fontSize: 12, color: Colors.deepPurple)),
             ),
-          if (quote != null && providerConfig != null) ...<Widget>[
+          if (!Platform.isAndroid && quote != null && providerConfig != null) ...<Widget>[
             const SizedBox(height: 12),
             // The web view is transparent and reports its own height; the host owns background and
             // padding — and the background is DARK on purpose: the frame's text is styled for a dark

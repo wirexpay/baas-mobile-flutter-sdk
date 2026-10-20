@@ -38,6 +38,11 @@ dependencies:
   # For the "Fetch estimate" helper on the Wallet tab (calls the documented BaaS API).
   http: ^1.2.2
 
+  # Android wallet checkout: open the Chrome Custom Tab (inAppBrowserView) and catch the return
+  # App Link. iOS keeps the inline WirexWalletCheckoutView, so these are Android's launch path.
+  url_launcher: ^6.3.0
+  app_links: ^6.3.0
+
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
