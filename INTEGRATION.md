@@ -1,8 +1,8 @@
 # Wirex Mobile SDK for Flutter — Integration Guide
 
-One pub.dev package, four sealed surfaces: card **Reveal**, card **Collect**, **3-D Secure** and **Wallet** top-up with Apple Pay and Google Pay. Card values stay in native views and never cross the Dart bridge. Every snippet below is analyzed against `wirex_mobile_sdk` 0.3.7.
+One pub.dev package, four sealed surfaces: card **Reveal**, card **Collect**, **3-D Secure** and **Wallet** top-up with Apple Pay and Google Pay. Card values stay in native views and never cross the Dart bridge. Every snippet below is analyzed against `wirex_mobile_sdk` 0.3.13.
 
-<!-- badges: Flutter · Dart | wirex_mobile_sdk 0.3.7 · pub.dev | Reveal · Collect · 3-D Secure · Wallet -->
+<!-- badges: Flutter · Dart | wirex_mobile_sdk 0.3.13 · pub.dev | Reveal · Collect · 3-D Secure · Wallet -->
 
 ## 1. What the SDK does
 
@@ -34,7 +34,7 @@ flutter pub add wirex_mobile_sdk
 ```yaml
 # pubspec.yaml
 dependencies:
-  wirex_mobile_sdk: ^0.3.7
+  wirex_mobile_sdk: ^0.3.13
 ```
 
 The native SDKs are installed with the package: the `WirexMobileSDK` pod from CocoaPods trunk and `com.wirexapp.baas:mobile-sdk` from Maven Central, both at the package's own version. The Android artifact merges the `<queries>` block Google Pay needs on Android 11 and later into your manifest. One import covers every surface:
@@ -348,7 +348,7 @@ const Map<String, Object?> collectAppearance = <String, Object?>{   // Collect a
 };
 const WirexRevealStrings revealStrings = WirexRevealStrings(
   fieldLabels: <WirexRevealField, String>{WirexRevealField.pan: 'Card number', WirexRevealField.cvv: 'CVV'},
-  copy: 'Copy', copied: 'Copied',
+  maskedSegmentGlyph: '*', copy: 'Copy', copied: 'Copied',
 );
 const WirexCollectStrings collectStrings = WirexCollectStrings(
   labels: <WirexCollectField, String>{WirexCollectField.number: 'Card number', WirexCollectField.expiry: 'Expiry'},
@@ -366,7 +366,7 @@ const WirexWalletBranding walletBranding = WirexWalletBranding(logo: WirexWallet
 ```
 
 - Card views take `themeMode` (`WirexThemeMode.light` / `dark`) and an appearance: typed `WirexRevealAppearance` for Reveal, a `Map<String, Object?>` with the same token names for Collect and 3-D Secure. Tokens: colours (`colorText`, `colorLabel`, `colorPlaceholder`, `colorError`, `colorFocus`, `colorBackground`, `colorBorder`, `surfaceColor`), typography (`fontFamily`, `fontSizeBase`, `fontSizeLabel`, `lineHeightBase`, `lineHeightLabel`, `fontWeightBase`, `fontWeightLabel`), geometry (`borderRadius`, `borderWidth`, `spacingUnit`, `paddingHorizontal`, `paddingVertical`, `spacingLabel`, `spacingError`, `iconSize`, `controlMinHeight`). Icons are PNG bytes wrapped in `WirexArtwork`: `WirexRevealIcons(copy:, copied:)`, `WirexCollectIcons.brands(visa:, mastercard:)`, `WirexThreeDSIcons(close:)`.
-- Strings: `WirexRevealStrings` (field labels, masked placeholder, copy texts), `WirexCollectStrings` (labels, placeholders, per-field errors with a `null` key as the default), `WirexThreeDSStrings(title:, close:, loading:)`.
+- Strings: `WirexRevealStrings` (field labels, `maskedPlaceholder` for plain fields, `maskedSegmentGlyph` drawn in every PIN cell while masked, default `'*'`, copy texts), `WirexCollectStrings` (labels, placeholders, per-field errors with a `null` key as the default), `WirexThreeDSStrings(title:, close:, loading:)`.
 - Wallet: `appearance` passes CSS variables to the frame; `buttons` sets the Apple Pay `style`/`type` and Google Pay `color`/`type`; `branding` sets the logo (`WirexWalletLogo.wirex()`, `hidden()`, `custom(dataUri)`), the processing disclosure and a privacy URL; `strings` is a `Map<SpecWalletStringKey, String>` overriding the 11 labels of the checkout.
 - **Sizing.** Reveal rows and the collect form size themselves from the native content; the wallet emits a `WirexWalletCheckoutNaturalHeight` event and exposes `controller.naturalHeight`. Apply those heights instead of hardcoding them.
 

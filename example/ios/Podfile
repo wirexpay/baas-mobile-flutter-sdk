@@ -1,13 +1,5 @@
-# The EXAMPLE's floor, and it is Flutter's rather than the SDK's.
-#
-# The plugins and the native SDK support iOS 13.0 and still declare it. Flutter does not: since 3.35
-# its own `Flutter.podspec` declares `ios.deployment_target = '15.0'`, and CocoaPods refuses to
-# resolve an app below the engine it has to link. `pod install` fails with "Specs satisfying the
-# `Flutter` dependency were found, but they required a higher minimum deployment target", which names
-# the engine and not the number to change.
-#
-# So a Flutter partner's floor is whichever is higher of ours and their Flutter's — 15.0 today. A
-# UIKit partner taking the native SDK directly is still on 13.0. README.md says both.
+# iOS 15: the floor of the plugins, the native SDK and Flutter 3.35+ alike. CocoaPods resolves an app
+# at the highest floor among its pods, so a lower number here fails `pod install` on the Flutter engine.
 platform :ios, '15.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.

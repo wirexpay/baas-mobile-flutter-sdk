@@ -33,7 +33,7 @@ dependencies:
 
   # The Wirex Mobile SDK — ONE package, all four surfaces: card reveal, card collect, 3-D Secure
   # and wallet top-up. Resolved from pub.dev.
-  wirex_mobile_sdk: ^0.3.7
+  wirex_mobile_sdk: ^0.3.13
 
   # For the "Fetch estimate" helper on the Wallet tab (calls the documented BaaS API).
   http: ^1.2.2
