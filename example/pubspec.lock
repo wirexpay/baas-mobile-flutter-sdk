@@ -353,10 +353,10 @@ packages:
     dependency: "direct main"
     description:
       name: wirex_mobile_sdk
-      sha256: "4808f262e478cfb6f39f0ced0755a280e00a7c5476d5df964b836f3b53fc5f30"
+      sha256: eff9c59fc95176fd1ddfdbc3f2dc564290eff9aa5358225ff0ccd042b1f66e12
       url: "https://pub.dev"
     source: hosted
-    version: "0.3.7"
+    version: "0.3.13"
 sdks:
   dart: ">=3.12.2 <4.0.0"
   flutter: ">=3.44.0"

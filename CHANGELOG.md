@@ -1,4 +1,4 @@
-## 0.3.12
+## 0.3.13
 
 Reveal
 - A row masked when the app leaves the foreground keeps your reveal request and draws again on return, as long as the session still holds the value. Past the session's 120 s lifetime the row stays masked until you load again.
@@ -6,6 +6,7 @@ Reveal
 - iOS floor is 15.0 on every plugin pod.
 - Android: PIN cells sized like iOS; card entry no longer leaks through a screen capture.
 - Android: Reveal: PIN cells fill the row at `controlMinHeight` height in a host box of exactly that height: a blank label collapses and a field without a copy control gives the copy slot to the value.
+- Reveal: new string `maskedSegmentGlyph`, drawn in every PIN cell while masked (default `*`; pass `•` for dots).
 
 ## 0.3.7
 

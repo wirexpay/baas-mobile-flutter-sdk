@@ -14,7 +14,7 @@ flutter pub get
 flutter run
 ```
 
-The package is resolved from pub.dev (`wirex_mobile_sdk: ^0.3.12` in `pubspec.yaml`).
+The package is resolved from pub.dev (`wirex_mobile_sdk: ^0.3.13` in `pubspec.yaml`).
 
 ## Configure at runtime
 
