@@ -1,9 +1,9 @@
 PODS:
   - Flutter (1.0.0)
-  - wirex_mobile_sdk (0.3.7):
+  - wirex_mobile_sdk (0.3.13):
     - Flutter
-    - WirexMobileSDK (~> 0.3.7)
-  - WirexMobileSDK (0.3.7)
+    - WirexMobileSDK (~> 0.3.13)
+  - WirexMobileSDK (0.3.13)
 
 DEPENDENCIES:
   - Flutter (from `Flutter`)
@@ -21,9 +21,9 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   Flutter: 71a624a5bc0c04062bf19101d501e466baf2fb47
-  wirex_mobile_sdk: d8ec03199ded577733e3401bb64c3bd7a0e1215a
-  WirexMobileSDK: 4dcb9c6b297f3281e1ba311b6ebed0a1b96bc01c
+  wirex_mobile_sdk: ab1cb2febca323be07d05d4b0cfb9db40c025def
+  WirexMobileSDK: eef4ef392c117e1ea96083d7703ad4cac4d57984
 
-PODFILE CHECKSUM: fc47c783970be265705d645c1326c6b8caaff70c
+PODFILE CHECKSUM: 32da9c0740fb58c6a77ac04dc8d03e19b1c6eaec
 
 COCOAPODS: 1.17.0
