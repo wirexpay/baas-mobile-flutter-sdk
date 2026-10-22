@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show PlatformException;
+import 'package:flutter/services.dart' show PlatformException, SystemChrome, SystemUiMode;
 import 'package:wirex_mobile_sdk/wirex_mobile_sdk.dart';
 
 import 'appearance_screen.dart';
@@ -15,7 +15,14 @@ import 'live_config.dart';
 import 'memory_cache.dart';
 import 'threeds_screen.dart';
 
-void main() => runApp(const ExampleApp());
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Draw behind the system bars and let the framework report their insets, so the bottom
+  // NavigationBar sits above the gesture pill / 3-button navigation bar rather than under it.
+  // Edge-to-edge is the default from Android 15 (targetSdk 35+); this requests it on every version.
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  runApp(const ExampleApp());
+}
 
 /// What a partner application has to implement.
 ///
