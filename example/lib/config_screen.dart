@@ -74,10 +74,24 @@ class _ConfigScreenState extends State<ConfigScreen> {
       });
       _focus[spec.key] = node;
     }
+    // A seed deep link (or any other code path) can change a value while this tab is built. Pull the
+    // new values into the fields when that happens, skipping the one being edited so typing is not cut.
+    LiveConfig.instance.credentialsRevision.addListener(_syncControllers);
+  }
+
+  void _syncControllers() {
+    if (!mounted) return;
+    for (final entry in _controllers.entries) {
+      if (_focus[entry.key]?.hasFocus ?? false) continue;
+      final String value = LiveConfig.instance.credential(entry.key);
+      if (entry.value.text != value) entry.value.text = value;
+    }
+    setState(() {});
   }
 
   @override
   void dispose() {
+    LiveConfig.instance.credentialsRevision.removeListener(_syncControllers);
     for (final c in _controllers.values) {
       c.dispose();
     }
@@ -125,6 +139,25 @@ class _ConfigScreenState extends State<ConfigScreen> {
             _group(_integration),
             _section('Secrets · memory only'),
             _group(_secrets),
+            _section('Screen capture'),
+            _card(<Widget>[
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Screen-capture protection (FLAG_SECURE)',
+                    style: TextStyle(color: _P.text, fontSize: 14, fontWeight: FontWeight.w600)),
+                subtitle: const Text(
+                  'On — card data is HIDDEN from screenshots / screen-recording on Reveal & Collect '
+                  '(the secure default).\n'
+                  'Off — data is VISIBLE so QA can capture it for a test.',
+                  style: TextStyle(color: _P.textDim, fontSize: 11),
+                ),
+                value: !LiveConfig.instance.disableScreenProtection,
+                onChanged: (bool protect) {
+                  LiveConfig.instance.setCredential('disableScreenProtection', protect ? 'false' : 'true');
+                  setState(() {});
+                },
+              ),
+            ]),
             _section('Credentials status'),
             _card(<Widget>[
               Text(

@@ -46,7 +46,15 @@ class LiveConfig extends ChangeNotifier {
 
   static const List<String> _known = <String>[
     'environment', 'bearer', 'email', 'wallet', 'cardId', 'actionToken', 'cardholderName', 'chainId', 'baasApiUrl',
+    // Screen-capture protection (`FLAG_SECURE`). Only `'true'` disables it; unset / anything else keeps
+    // it ON — the secure default. Set it from the Config tab or the seed deep link to let QA capture
+    // the reveal / collect surfaces for a test.
+    'disableScreenProtection',
   ];
+
+  /// Whether to pass `dangerouslyDisableScreenProtection: true` to the SDK. Default false (protection
+  /// ON — the secure default); set `disableScreenProtection=true` to let QA screenshot the surfaces.
+  bool get disableScreenProtection => credential('disableScreenProtection') == 'true';
 
   /// Bumped whenever a credential / identity value changes, so a screen can rebuild. Separate from
   /// the `ChangeNotifier` this class uses for appearance: a credential change may have to rebuild a
