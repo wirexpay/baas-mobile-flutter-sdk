@@ -104,6 +104,39 @@ class LiveConfig extends ChangeNotifier {
   /// `test` everywhere but the production name — mirrors `exampleConfig.ts`.
   bool get isTestMode => environment != 'production';
 
+  /// The native / RN examples name identity `userWallet` / `userEmail`; one seed link serves every
+  /// platform.
+  static const Map<String, String> _seedAliases = <String, String>{'userWallet': 'wallet', 'userEmail': 'email'};
+
+  /// Applies a `wirexqa://seed?d=<base64url(JSON)>` link — the deep link the example registers — from
+  /// the launch URI or from text pasted into the Config tab. Returns how many values were set, or null
+  /// when [uri] is not a seed link (other scheme or host, no `d`, undecodable). Any key is applied, the
+  /// bearer and action token included; the payload is one base64 param (no `&`/`+` to mangle). A real
+  /// integration mints these from its own auth and the user's wallet; this only saves typing on a test
+  /// device — every value stays in memory only.
+  int? applySeedLink(Uri? uri) {
+    if (uri == null || uri.scheme != 'wirexqa' || uri.host != 'seed') return null;
+    final String? d = uri.queryParameters['d'];
+    if (d == null || d.isEmpty) return null;
+    try {
+      final Map<String, dynamic> json =
+          jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(d)))) as Map<String, dynamic>;
+      int applied = 0;
+      json.forEach((String rawKey, dynamic value) {
+        if (value == null || '$value'.isEmpty) return;
+        setCredential(_seedAliases[rawKey] ?? rawKey, '$value', notify: false);
+        applied++;
+      });
+      credentialsRevision.value++;
+      return applied;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// [applySeedLink] for text pasted into the Config tab.
+  int? applySeedLinkText(String text) => applySeedLink(Uri.tryParse(text.trim()));
+
   /// Clears every credential / identity value back to empty (environment falls back to `test`).
   void resetCredentials() {
     _credentials.clear();
