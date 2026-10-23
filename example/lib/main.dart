@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
@@ -116,7 +115,8 @@ class _TabsState extends State<_Tabs> {
     // A `wirexqa://seed?d=<base64url(JSON)>` deep link prefills the Config, so a partner or QA can arm
     // a device without typing — ANY parameter, the bearer and action token included. The payload is one
     // base64 param (no `&`/`+` to mangle). A real integration mints these from its own auth and the
-    // user's wallet; nothing is compiled into the binary (there are no secret `--dart-define`s).
+    // user's wallet; nothing is compiled into the binary (there are no secret `--dart-define`s). The
+    // Config tab has a field for the same link, for a device where opening it is awkward.
     final AppLinks links = AppLinks();
     links.getInitialLink().then(_applySeedLink);
     _seedSub = links.uriLinkStream.listen(_applySeedLink);
@@ -125,25 +125,8 @@ class _TabsState extends State<_Tabs> {
   }
 
   StreamSubscription<Uri>? _seedSub;
-  // The native / RN examples name identity `userWallet` / `userEmail`; map them to this example's keys
-  // so one seed link works across platforms. Every other key is applied as-is.
-  static const Map<String, String> _seedAliases = <String, String>{'userWallet': 'wallet', 'userEmail': 'email'};
 
-  void _applySeedLink(Uri? uri) {
-    if (uri == null || uri.host != 'seed') return;
-    final String? d = uri.queryParameters['d'];
-    if (d == null || d.isEmpty) return;
-    try {
-      final Map<String, dynamic> json =
-          jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(d)))) as Map<String, dynamic>;
-      json.forEach((String rawKey, dynamic value) {
-        final String key = _seedAliases[rawKey] ?? rawKey;
-        if (value != null && '$value'.isNotEmpty) LiveConfig.instance.setCredential(key, '$value');
-      });
-    } catch (_) {
-      // ignore a malformed seed link
-    }
-  }
+  void _applySeedLink(Uri? uri) => LiveConfig.instance.applySeedLink(uri);
 
   String _collectConfigKey = '';
   String _walletEnvironment = '';

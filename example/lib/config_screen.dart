@@ -58,6 +58,11 @@ class ConfigScreen extends StatefulWidget {
 class _ConfigScreenState extends State<ConfigScreen> {
   final Map<String, TextEditingController> _controllers = <String, TextEditingController>{};
   final Map<String, FocusNode> _focus = <String, FocusNode>{};
+  // The same `wirexqa://seed?d=…` link the app opens as a deep link, pasted instead — for a device
+  // where opening the link is awkward (a chat that strips the scheme, a locked-down browser).
+  final TextEditingController _seed = TextEditingController();
+  String? _seedStatus;
+  bool _seedOk = false;
 
   @override
   void initState() {
@@ -95,10 +100,21 @@ class _ConfigScreenState extends State<ConfigScreen> {
     for (final c in _controllers.values) {
       c.dispose();
     }
+    _seed.dispose();
     for (final n in _focus.values) {
       n.dispose();
     }
     super.dispose();
+  }
+
+  void _applySeed() {
+    final int? applied = LiveConfig.instance.applySeedLinkText(_seed.text);
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      _seedOk = applied != null;
+      _seedStatus = applied == null ? 'Not a wirexqa://seed link' : 'Applied $applied value${applied == 1 ? '' : 's'}';
+      if (applied != null) _seed.clear();
+    });
   }
 
   void _resetAll() {
@@ -127,6 +143,31 @@ class _ConfigScreenState extends State<ConfigScreen> {
               "Type a partner's parameters here; every screen reads them live. Secrets stay in memory only.",
               style: TextStyle(fontSize: 13, color: _P.textDim),
             ),
+            _section('Seed link'),
+            _card(<Widget>[
+              TextField(
+                controller: _seed,
+                autocorrect: false,
+                enableSuggestions: false,
+                keyboardType: TextInputType.url,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _applySeed(),
+                style: const TextStyle(fontSize: 15, color: _P.text),
+                decoration: _decoration('wirexqa://seed?d=…'),
+              ),
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: _pill('Apply', _P.text, _P.accent, _P.accent, _applySeed),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _seedStatus ??
+                    'Paste the link the QA kit prints (the same one the app opens as a deep link); Apply fills every field below.',
+                style: TextStyle(
+                    fontSize: 12, color: _seedStatus == null ? _P.textFaint : (_seedOk ? _P.teal : _P.pink)),
+              ),
+            ]),
             _section('Environment'),
             Row(
               children: <Widget>[
@@ -236,24 +277,26 @@ class _ConfigScreenState extends State<ConfigScreen> {
             style: const TextStyle(fontSize: 15, color: _P.text),
             // Mid-edit: keep the store live without posting, so screens do not rebuild per keystroke.
             onChanged: (value) => LiveConfig.instance.setCredential(spec.key, value, notify: false),
-            decoration: InputDecoration(
-              isDense: true,
-              hintText: spec.secure ? 'paste…' : '',
-              hintStyle: const TextStyle(color: _P.textFaint),
-              filled: true,
-              fillColor: _P.surfaceAlt,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: _P.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: _P.accent),
-              ),
-            ),
+            decoration: _decoration(spec.secure ? 'paste…' : ''),
           ),
         ],
+      );
+
+  InputDecoration _decoration(String hint) => InputDecoration(
+        isDense: true,
+        hintText: hint,
+        hintStyle: const TextStyle(color: _P.textFaint),
+        filled: true,
+        fillColor: _P.surfaceAlt,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: _P.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: _P.accent),
+        ),
       );
 
   Widget _card(List<Widget> children) => Container(
