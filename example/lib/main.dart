@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show PlatformException;
+import 'package:flutter/services.dart' show PlatformException, SystemChrome, SystemUiMode;
 import 'package:wirex_mobile_sdk/wirex_mobile_sdk.dart';
 
 import 'appearance_screen.dart';
@@ -13,7 +15,14 @@ import 'live_config.dart';
 import 'memory_cache.dart';
 import 'threeds_screen.dart';
 
-void main() => runApp(const ExampleApp());
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Draw behind the system bars and let the framework report their insets, so the bottom
+  // NavigationBar sits above the gesture pill / 3-button navigation bar rather than under it.
+  // Edge-to-edge is the default from Android 15 (targetSdk 35+); this requests it on every version.
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  runApp(const ExampleApp());
+}
 
 /// What a partner application has to implement.
 ///
@@ -64,7 +73,12 @@ class ExampleApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'Wirex card SDK — Flutter',
+    // The reveal / collect surfaces are themed from the OS brightness (platformBrightness). The app
+    // chrome must follow the SAME brightness, or on a dark-mode device the chrome stays light while
+    // the SDK draws dark-theme (light) text — the card value then renders invisibly on a light
+    // background. A matching darkTheme keeps both on the OS theme (themeMode defaults to system).
     theme: ThemeData(colorSchemeSeed: const Color(0xFF7C3AED)),
+    darkTheme: ThemeData(colorSchemeSeed: const Color(0xFF7C3AED), brightness: Brightness.dark),
     home: const _Tabs(),
   );
 }
@@ -99,8 +113,36 @@ class _TabsState extends State<_Tabs> {
     // A value typed on the Config tab: reconfigure collect so the fresh environment / chainId /
     // bearer take effect. Reveal and 3DS observe the same revision for themselves.
     LiveConfig.instance.credentialsRevision.addListener(_onCredentialsChanged);
+    // A `wirexqa://seed?d=<base64url(JSON)>` deep link prefills the Config, so a partner or QA can arm
+    // a device without typing — ANY parameter, the bearer and action token included. The payload is one
+    // base64 param (no `&`/`+` to mangle). A real integration mints these from its own auth and the
+    // user's wallet; nothing is compiled into the binary (there are no secret `--dart-define`s).
+    final AppLinks links = AppLinks();
+    links.getInitialLink().then(_applySeedLink);
+    _seedSub = links.uriLinkStream.listen(_applySeedLink);
     _configureCollect();
     _bootstrapWallet();
+  }
+
+  StreamSubscription<Uri>? _seedSub;
+  // The native / RN examples name identity `userWallet` / `userEmail`; map them to this example's keys
+  // so one seed link works across platforms. Every other key is applied as-is.
+  static const Map<String, String> _seedAliases = <String, String>{'userWallet': 'wallet', 'userEmail': 'email'};
+
+  void _applySeedLink(Uri? uri) {
+    if (uri == null || uri.host != 'seed') return;
+    final String? d = uri.queryParameters['d'];
+    if (d == null || d.isEmpty) return;
+    try {
+      final Map<String, dynamic> json =
+          jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(d)))) as Map<String, dynamic>;
+      json.forEach((String rawKey, dynamic value) {
+        final String key = _seedAliases[rawKey] ?? rawKey;
+        if (value != null && '$value'.isNotEmpty) LiveConfig.instance.setCredential(key, '$value');
+      });
+    } catch (_) {
+      // ignore a malformed seed link
+    }
   }
 
   String _collectConfigKey = '';
@@ -110,7 +152,7 @@ class _TabsState extends State<_Tabs> {
   /// changed: the bearer is read per call, and a reconfigure would clear a half-typed card. The
   /// wallet is re-bootstrapped only when the environment changed.
   void _onCredentialsChanged() {
-    final String key = '${LiveConfig.instance.isTestMode}|${LiveConfig.instance.credential('chainId')}';
+    final String key = '${LiveConfig.instance.isTestMode}|${LiveConfig.instance.credential('chainId')}|${LiveConfig.instance.disableScreenProtection}';
     if (key != _collectConfigKey) unawaited(_configureCollect());
     if (LiveConfig.instance.environment != _walletEnvironment) unawaited(_bootstrapWallet());
   }
@@ -134,6 +176,7 @@ class _TabsState extends State<_Tabs> {
   void dispose() {
     LiveConfig.instance.removeListener(_restyle);
     LiveConfig.instance.credentialsRevision.removeListener(_onCredentialsChanged);
+    _seedSub?.cancel();
     _walletCache.dispose();
     super.dispose();
   }
@@ -161,7 +204,7 @@ class _TabsState extends State<_Tabs> {
   /// The collect SDK is configured separately from reveal's, because they are separate SDKs that
   /// happen to share a credential source. A partner integrating one calls one of these.
   Future<void> _configureCollect() async {
-    _collectConfigKey = '${LiveConfig.instance.isTestMode}|${LiveConfig.instance.credential('chainId')}';
+    _collectConfigKey = '${LiveConfig.instance.isTestMode}|${LiveConfig.instance.credential('chainId')}|${LiveConfig.instance.disableScreenProtection}';
     try {
       await WirexCollect.configure(
         testMode: LiveConfig.instance.isTestMode,
@@ -169,6 +212,7 @@ class _TabsState extends State<_Tabs> {
         // The same token the reveal screen's provider mints. Collect asks only for this one: entering
         // a card the user is holding is not an action token-gated action.
         accessToken: () async => LiveConfig.instance.credential('bearer'),
+        dangerouslyDisableScreenProtection: LiveConfig.instance.disableScreenProtection,
       );
       if (mounted) setState(() => _collectConfigured = true);
     } on PlatformException {
@@ -188,24 +232,19 @@ class _TabsState extends State<_Tabs> {
         _ => 'Appearance — Flutter',
       }),
     ),
+    // The reveal / collect / 3DS surfaces apply screen-capture protection (`FLAG_SECURE`) at the
+    // WINDOW level while their native view is attached. In an `IndexedStack` every child stays in the
+    // tree, so a reveal row attached on an off-screen tab secured the WHOLE window — Config and every
+    // other tab then captured black too. Keeping those three surfaces in the tree ONLY while their tab
+    // is selected scopes the protection to the tab the user is actually on. Config / Wallet / Appearance
+    // carry no protected view, so they stay mounted to preserve their state.
     body: IndexedStack(
       index: _index,
-      // NOT `const`.
-      //
-      // A const widget is canonicalised: every rebuild of this screen hands `IndexedStack` the
-      // SAME instance, Flutter sees `identical(old, new)` and skips the subtree entirely — so
-      // `didUpdateWidget` never runs on the rows, no `update` crosses the channel, and the native
-      // view keeps the appearance it was built with. Switching tabs looked like a rendering bug and
-      // was a rebuild that never happened.
-      //
-      // `CollectScreen` was never const because it takes a changing parameter, which is exactly why
-      // that surface picked up a restyle immediately and this one did not — the difference that
-      // located this.
       children: <Widget>[
         const ConfigScreen(),
-        RevealScreen(),
-        CollectScreen(configured: _collectConfigured),
-        ThreeDSScreen(),
+        _index == 1 ? RevealScreen() : const SizedBox.shrink(),
+        _index == 2 ? CollectScreen(configured: _collectConfigured) : const SizedBox.shrink(),
+        _index == 3 ? ThreeDSScreen() : const SizedBox.shrink(),
         _walletTab(),
         AppearanceScreen(),
       ],
@@ -322,7 +361,7 @@ class _RevealScreenState extends State<RevealScreen> {
   }
 
   void _onCredentialsChanged() {
-    final key = '${LiveConfig.instance.isTestMode}|${LiveConfig.instance.credential('chainId')}';
+    final key = '${LiveConfig.instance.isTestMode}|${LiveConfig.instance.credential('chainId')}|${LiveConfig.instance.disableScreenProtection}';
     // The chain id / environment are read at configure time: a change there (or recovering from a
     // failed configure, when there is no session) must reconfigure, not just rebuild the session.
     if (key != _lastConfigKey || _session == null) {
@@ -420,8 +459,9 @@ class _RevealScreenState extends State<RevealScreen> {
         testMode: LiveConfig.instance.isTestMode,
         chainId: LiveConfig.instance.credential('chainId'),
         credentials: credentials,
+        dangerouslyDisableScreenProtection: LiveConfig.instance.disableScreenProtection,
       );
-      _lastConfigKey = '${LiveConfig.instance.isTestMode}|${LiveConfig.instance.credential('chainId')}';
+      _lastConfigKey = '${LiveConfig.instance.isTestMode}|${LiveConfig.instance.credential('chainId')}|${LiveConfig.instance.disableScreenProtection}';
       await _createSession();
     } catch (error) {
       if (mounted) setState(() => _configureError = '$error');
