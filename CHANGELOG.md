@@ -1,3 +1,7 @@
+## 0.3.14
+
+- Native SDKs bumped to 0.3.14: reveal now honours `dangerouslyDisableScreenProtection` for a row attached before its session binds (the window no longer stays `FLAG_SECURE` when protection was disabled), and a reveal field redacts its own debug output.
+
 ## 0.3.13
 
 Reveal

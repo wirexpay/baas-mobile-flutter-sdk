@@ -131,8 +131,8 @@
   <div class="wrap">
     <div class="eyebrow">Wirex Mobile SDK</div>
     <h1>Wirex Mobile SDK for Flutter — Integration Guide</h1>
-    <p class="lede">One pub.dev package, four sealed surfaces: card <strong>Reveal</strong>, card <strong>Collect</strong>, <strong>3-D Secure</strong> and <strong>Wallet</strong> top-up with Apple Pay and Google Pay. Card values stay in native views and never cross the Dart bridge. Every snippet below is analyzed against <code>wirex_mobile_sdk</code> 0.3.13.</p>
-    <div class="badges"><span class="badge">Flutter · Dart</span><span class="badge">wirex_mobile_sdk 0.3.13 · pub.dev</span><span class="badge ok">Reveal · Collect · 3-D Secure · Wallet</span></div>
+    <p class="lede">One pub.dev package, four sealed surfaces: card <strong>Reveal</strong>, card <strong>Collect</strong>, <strong>3-D Secure</strong> and <strong>Wallet</strong> top-up with Apple Pay and Google Pay. Card values stay in native views and never cross the Dart bridge. Every snippet below is analyzed against <code>wirex_mobile_sdk</code> 0.3.14.</p>
+    <div class="badges"><span class="badge">Flutter · Dart</span><span class="badge">wirex_mobile_sdk 0.3.14 · pub.dev</span><span class="badge ok">Reveal · Collect · 3-D Secure · Wallet</span></div>
   </div>
 </header>
 <main class="wrap">
@@ -209,7 +209,7 @@
 <pre><code>flutter pub add wirex_mobile_sdk</code></pre>
 <pre><code><span class="tok-c"># pubspec.yaml</span>
 dependencies:
-  wirex_mobile_sdk: ^0.3.13</code></pre>
+  wirex_mobile_sdk: ^0.3.14</code></pre>
 <p>The native SDKs are installed with the package: the <code>WirexMobileSDK</code> pod from CocoaPods trunk and <code>com.wirexapp.baas:mobile-sdk</code> from Maven Central, both at the package's own version. The Android artifact merges the <code>&lt;queries&gt;</code> block Google Pay needs on Android 11 and later into your manifest. One import covers every surface:</p>
 <pre><code>import 'package:wirex_mobile_sdk/wirex_mobile_sdk.dart';</code></pre>
 <p>Wirex assigns these values per integration. Everything else is your user's data.</p>
