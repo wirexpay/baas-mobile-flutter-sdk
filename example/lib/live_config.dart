@@ -50,6 +50,9 @@ class LiveConfig extends ChangeNotifier {
     // it ON — the secure default. Set it from the Config tab or the seed deep link to let QA capture
     // the reveal / collect surfaces for a test.
     'disableScreenProtection',
+    // Per-surface inputs a seed link may carry, so a QA device needs no typing at all: the 3DS tab's
+    // orchestrator URL and the Checkout tab's checkout token / estimation id / provider.
+    'threeDsUrl', 'checkoutToken', 'estimationId', 'walletProvider',
   ];
 
   /// Whether to pass `dangerouslyDisableScreenProtection: true` to the SDK. Default false (protection
@@ -115,7 +118,9 @@ class LiveConfig extends ChangeNotifier {
   /// integration mints these from its own auth and the user's wallet; this only saves typing on a test
   /// device — every value stays in memory only.
   int? applySeedLink(Uri? uri) {
-    if (uri == null || uri.scheme != 'wirexqa' || uri.host != 'seed') return null;
+    // `wirexqa-flutter://` is this example's own scheme (iOS opens ONE app per scheme, so each example
+    // has one); `wirexqa://` is the shared one every example also registers.
+    if (uri == null || !(uri.scheme == 'wirexqa' || uri.scheme == 'wirexqa-flutter') || uri.host != 'seed') return null;
     final String? d = uri.queryParameters['d'];
     if (d == null || d.isEmpty) return null;
     try {

@@ -24,6 +24,7 @@ class _ThreeDSScreenState extends State<ThreeDSScreen> {
   static const _launchUrl = String.fromEnvironment('WIREX_THREEDS_URL');
 
   final _url = TextEditingController(text: _launchUrl);
+  final FocusNode _urlFocus = FocusNode();
   Future<void>? _configured;
   bool? _configuredTestMode;
   WirexThreeDSSession? _session;
@@ -34,10 +35,20 @@ class _ThreeDSScreenState extends State<ThreeDSScreen> {
   void initState() {
     super.initState();
     if (_launchUrl.isNotEmpty) WidgetsBinding.instance.addPostFrameCallback((_) => _start());
+    // A seed link (deep link or the Config tab's field) may carry `threeDsUrl`: prefill the field.
+    _syncFromConfig();
+    LiveConfig.instance.credentialsRevision.addListener(_syncFromConfig);
+  }
+
+  void _syncFromConfig() {
+    final String seeded = LiveConfig.instance.credential('threeDsUrl');
+    if (seeded.isNotEmpty && _url.text != seeded && !_urlFocus.hasFocus) _url.text = seeded;
   }
 
   @override
   void dispose() {
+    LiveConfig.instance.credentialsRevision.removeListener(_syncFromConfig);
+    _urlFocus.dispose();
     _url.dispose();
     unawaited(_session?.destroy());
     super.dispose();
@@ -101,6 +112,7 @@ class _ThreeDSScreenState extends State<ThreeDSScreen> {
             children: <Widget>[
               TextField(
                 controller: _url,
+                focusNode: _urlFocus,
                 decoration: const InputDecoration(hintText: 'three_ds_state.url'),
                 autocorrect: false,
                 keyboardType: TextInputType.url,

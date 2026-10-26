@@ -46,6 +46,8 @@
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="wirexqa" android:host="seed"/>
+                <!-- This example's own scheme: one QR / link per example, no chooser. -->
+                <data android:scheme="wirexqa-flutter" android:host="seed"/>
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
