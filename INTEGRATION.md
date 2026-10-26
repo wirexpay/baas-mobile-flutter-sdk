@@ -1,8 +1,8 @@
 # Wirex Mobile SDK for Flutter — Integration Guide
 
-One pub.dev package, four sealed surfaces: card **Reveal**, card **Collect**, **3-D Secure** and **Wallet** top-up with Apple Pay and Google Pay. Card values stay in native views and never cross the Dart bridge. Every snippet below is analyzed against `wirex_mobile_sdk` 0.3.14.
+One pub.dev package, four sealed surfaces: card **Reveal**, card **Collect**, **3-D Secure** and **Wallet** top-up with Apple Pay and Google Pay. Card values stay in native views and never cross the Dart bridge. Every snippet below is analyzed against `wirex_mobile_sdk` 0.3.15.
 
-<!-- badges: Flutter · Dart | wirex_mobile_sdk 0.3.14 · pub.dev | Reveal · Collect · 3-D Secure · Wallet -->
+<!-- badges: Flutter · Dart | wirex_mobile_sdk 0.3.15 · pub.dev | Reveal · Collect · 3-D Secure · Wallet -->
 
 ## 1. What the SDK does
 
@@ -34,7 +34,7 @@ flutter pub add wirex_mobile_sdk
 ```yaml
 # pubspec.yaml
 dependencies:
-  wirex_mobile_sdk: ^0.3.14
+  wirex_mobile_sdk: ^0.3.15
 ```
 
 The native SDKs are installed with the package: the `WirexMobileSDK` pod from CocoaPods trunk and `com.wirexapp.baas:mobile-sdk` from Maven Central, both at the package's own version. The Android artifact merges the `<queries>` block Google Pay needs on Android 11 and later into your manifest. One import covers every surface:
@@ -134,7 +134,7 @@ class RevealRow extends StatelessWidget {
 
 > **Gotcha · sizing** A native row cannot be sized from Dart. Give it the width and let it take its natural height; a box shorter than the content clips the value.
 
-> **Note · simulator** The value is drawn in a secure, capture-proof layer that the iOS Simulator renders blank. That is the PCI protection working. For simulator development only, pass `dangerouslyDisableScreenProtection: true` to `configure(...)`. Never ship it on.
+> **Note · simulator** The value is drawn in a secure, capture-proof layer that the iOS Simulator renders blank. That is the PCI protection working. For simulator development only, pass `dangerouslyDisableScreenProtection: true` to `configure(...)`; `WirexThreeDS.instance.configure(dangerouslyDisableScreenProtection: true)` is the same switch for the 3-D Secure challenge (no `FLAG_SECURE` on Android, no cover while the screen is recorded on iOS). Never ship it on.
 
 ## 5. Collect {creds}
 

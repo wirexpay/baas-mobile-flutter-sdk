@@ -1,3 +1,9 @@
+## 0.3.15
+
+- 3-D Secure on iOS: the challenge now renders (the native view was left off-screen by the platform view's frame updates, so `state: challenge` showed an empty box).
+- 3-D Secure: `dangerouslyDisableScreenProtection` in `WirexThreeDS.instance.configure()`, the same switch Reveal and Collect have. Android applies no `FLAG_SECURE` while a challenge is on screen; iOS does not cover the page while the screen is recorded or mirrored. For automated UI tests and device clouds; off by default.
+- Native SDKs 0.3.15.
+
 ## 0.3.14
 
 - Native SDKs bumped to 0.3.14: reveal now honours `dangerouslyDisableScreenProtection` for a row attached before its session binds (the window no longer stays `FLAG_SECURE` when protection was disabled), and a reveal field redacts its own debug output.

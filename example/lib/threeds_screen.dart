@@ -26,7 +26,7 @@ class _ThreeDSScreenState extends State<ThreeDSScreen> {
   final _url = TextEditingController(text: _launchUrl);
   final FocusNode _urlFocus = FocusNode();
   Future<void>? _configured;
-  bool? _configuredTestMode;
+  String? _configuredKey;
   WirexThreeDSSession? _session;
   String _status = 'no session';
   bool _settled = false;
@@ -56,11 +56,20 @@ class _ThreeDSScreenState extends State<ThreeDSScreen> {
 
   Future<void> _start() async {
     try {
-      // `testMode` is read at configure time: reconfigure when the Config tab's environment changed.
+      // `testMode` and the Screen capture switch are read at configure time: reconfigure when the
+      // Config tab changed either.
       final bool testMode = LiveConfig.instance.isTestMode;
-      if (_configured == null || _configuredTestMode != testMode) {
-        _configuredTestMode = testMode;
-        _configured = WirexThreeDS.instance.configure(testMode: testMode, logging: 'info');
+      final bool disableProtection = LiveConfig.instance.disableScreenProtection;
+      final String key = '$testMode|$disableProtection';
+      if (_configured == null || _configuredKey != key) {
+        _configuredKey = key;
+        _configured = WirexThreeDS.instance.configure(
+          testMode: testMode,
+          logging: 'info',
+          // DEV/TEST ONLY — the Config tab's Screen capture switch, the same one Reveal and Collect
+          // read. Off = the challenge is visible to screenshots and recording (device clouds).
+          dangerouslyDisableScreenProtection: disableProtection,
+        );
       }
       await _configured;
       final previous = _session;

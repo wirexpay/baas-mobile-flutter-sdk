@@ -187,7 +187,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
                 title: const Text('Screen-capture protection (FLAG_SECURE)',
                     style: TextStyle(color: _P.text, fontSize: 14, fontWeight: FontWeight.w600)),
                 subtitle: const Text(
-                  'On — card data is HIDDEN from screenshots / screen-recording on Reveal & Collect '
+                  'On — card data is HIDDEN from screenshots / screen-recording on Reveal, Collect & 3DS '
                   '(the secure default).\n'
                   'Off — data is VISIBLE so QA can capture it for a test.',
                   style: TextStyle(color: _P.textDim, fontSize: 11),
