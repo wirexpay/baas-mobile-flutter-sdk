@@ -65,9 +65,24 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final List<String> _events = <String>[];
   String _note = '';
 
+  // A seed link (deep link or the Config tab's field) may carry the checkout token, estimation id and
+  // provider: prefill those fields, so a QA device needs no typing. They stay editable.
+  void _syncFromConfig() {
+    for (final MapEntry<TextEditingController, String> e in <TextEditingController, String>{
+      _checkoutToken: 'checkoutToken',
+      _estimationId: 'estimationId',
+      _provider: 'walletProvider',
+    }.entries) {
+      final String seeded = LiveConfig.instance.credential(e.value);
+      if (seeded.isNotEmpty && e.key.text != seeded) e.key.text = seeded;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _syncFromConfig();
+    LiveConfig.instance.credentialsRevision.addListener(_syncFromConfig);
     // Android: the Custom Tab returns through an https App Link; listen for it and read the outcome.
     if (Platform.isAndroid) {
       final AppLinks links = AppLinks();
@@ -86,6 +101,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   @override
   void dispose() {
+    LiveConfig.instance.credentialsRevision.removeListener(_syncFromConfig);
     _linkSub?.cancel();
     _providerJson.dispose();
     _estimationId.dispose();

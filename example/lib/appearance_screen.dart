@@ -38,6 +38,8 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
   late final TextEditingController _tokens = TextEditingController();
   String _status = '—';
 
+  // A preset that sets no colours carries the same map twice on purpose: geometry does not change with
+  // the mode, and an empty dark map would leave a dark device with nothing to apply (and an empty editor).
   static const List<_Preset> _presets = <_Preset>[
     _Preset(
       'SDK defaults',
@@ -94,7 +96,16 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
         'spacingLabel': 8,
         'spacingUnit': 20,
       },
-      <String, Object?>{},
+      <String, Object?>{
+        'fontSizeBase': 24,
+        'lineHeightBase': 34,
+        'fontSizeLabel': 15,
+        'lineHeightLabel': 20,
+        'controlMinHeight': 56,
+        'iconSize': 24,
+        'spacingLabel': 8,
+        'spacingUnit': 20,
+      },
     ),
     _Preset(
       'Compact',
@@ -111,7 +122,18 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
         'paddingHorizontal': 8,
         'paddingVertical': 6,
       },
-      <String, Object?>{},
+      <String, Object?>{
+        'fontSizeBase': 15,
+        'lineHeightBase': 20,
+        'fontSizeLabel': 11,
+        'lineHeightLabel': 14,
+        'controlMinHeight': 36,
+        'iconSize': 12,
+        'spacingLabel': 2,
+        'spacingUnit': 6,
+        'paddingHorizontal': 8,
+        'paddingVertical': 6,
+      },
     ),
     _Preset(
       'High contrast',
@@ -128,7 +150,18 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
         'borderWidth': 2,
         'borderRadius': 4,
       },
-      <String, Object?>{},
+      <String, Object?>{
+        'surfaceColor': '#000000',
+        'colorBackground': '#000000',
+        'colorText': '#FFFFFF',
+        'colorLabel': '#FFD400',
+        'colorPlaceholder': '#7A7A7A',
+        'colorFocus': '#FFD400',
+        'colorError': '#FF453A',
+        'colorBorder': '#FFD400',
+        'borderWidth': 2,
+        'borderRadius': 4,
+      },
     ),
   ];
 
