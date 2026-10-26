@@ -131,8 +131,8 @@
   <div class="wrap">
     <div class="eyebrow">Wirex Mobile SDK</div>
     <h1>Wirex Mobile SDK for Flutter — Integration Guide</h1>
-    <p class="lede">One pub.dev package, four sealed surfaces: card <strong>Reveal</strong>, card <strong>Collect</strong>, <strong>3-D Secure</strong> and <strong>Wallet</strong> top-up with Apple Pay and Google Pay. Card values stay in native views and never cross the Dart bridge. Every snippet below is analyzed against <code>wirex_mobile_sdk</code> 0.3.14.</p>
-    <div class="badges"><span class="badge">Flutter · Dart</span><span class="badge">wirex_mobile_sdk 0.3.14 · pub.dev</span><span class="badge ok">Reveal · Collect · 3-D Secure · Wallet</span></div>
+    <p class="lede">One pub.dev package, four sealed surfaces: card <strong>Reveal</strong>, card <strong>Collect</strong>, <strong>3-D Secure</strong> and <strong>Wallet</strong> top-up with Apple Pay and Google Pay. Card values stay in native views and never cross the Dart bridge. Every snippet below is analyzed against <code>wirex_mobile_sdk</code> 0.3.15.</p>
+    <div class="badges"><span class="badge">Flutter · Dart</span><span class="badge">wirex_mobile_sdk 0.3.15 · pub.dev</span><span class="badge ok">Reveal · Collect · 3-D Secure · Wallet</span></div>
   </div>
 </header>
 <main class="wrap">
@@ -209,7 +209,7 @@
 <pre><code>flutter pub add wirex_mobile_sdk</code></pre>
 <pre><code><span class="tok-c"># pubspec.yaml</span>
 dependencies:
-  wirex_mobile_sdk: ^0.3.14</code></pre>
+  wirex_mobile_sdk: ^0.3.15</code></pre>
 <p>The native SDKs are installed with the package: the <code>WirexMobileSDK</code> pod from CocoaPods trunk and <code>com.wirexapp.baas:mobile-sdk</code> from Maven Central, both at the package's own version. The Android artifact merges the <code>&lt;queries&gt;</code> block Google Pay needs on Android 11 and later into your manifest. One import covers every surface:</p>
 <pre><code>import 'package:wirex_mobile_sdk/wirex_mobile_sdk.dart';</code></pre>
 <p>Wirex assigns these values per integration. Everything else is your user's data.</p>
@@ -281,7 +281,7 @@ class RevealRow extends StatelessWidget {
 }</code></pre>
 <ul><li><code>fields</code> are <code>WirexRevealField</code> values: <code>cardholderName</code>, <code>pan</code>, <code>expiry</code>, <code>cvv</code>, <code>pin</code>. Omit <code>pin</code> for a virtual card.</li><li><code>pan</code>, <code>cvv</code> and <code>pin</code> start <strong>masked</strong>. Control it with the <code>masked</code> parameter; <code>onMaskedChange</code> reports the masked state and whether screenshot protection is active. Rows re-mask when detached unless <code>masksWhenDetached: false</code>.</li><li>Session state is <code>snapshot.state</code>: <code>WirexRevealState.idle</code>, <code>loading</code>, <code>ready</code>, <code>error</code>. Per-field results are <code>snapshot.outcomeFor(field)</code> (<code>WirexRevealFieldOutcome.idle</code>, <code>loading</code>, <code>loaded</code>, <code>failed</code>) plus the <code>snapshot.loaded</code> and <code>snapshot.failed</code> sets, so one failed field does not hide the others.</li><li><code>session.load()</code> resolves with the snapshot and never throws for a request failure; <code>refresh()</code> reloads, <code>clear()</code> wipes values, <code>destroy()</code> releases the native session. Values are wiped two minutes after the first load. <code>WirexReveal.instance.destroyAll()</code> tears down everything.</li><li><code>onCopyResult(copied)</code> fires when the user copies a copyable field. The row sizes itself from the native content.</li></ul>
 <div class="note warn"><span class="lbl">Gotcha · sizing</span> A native row cannot be sized from Dart. Give it the width and let it take its natural height; a box shorter than the content clips the value.</div>
-<div class="note"><span class="lbl">Note · simulator</span> The value is drawn in a secure, capture-proof layer that the iOS Simulator renders blank. That is the PCI protection working. For simulator development only, pass <code>dangerouslyDisableScreenProtection: true</code> to <code>configure(...)</code>. Never ship it on.</div>
+<div class="note"><span class="lbl">Note · simulator</span> The value is drawn in a secure, capture-proof layer that the iOS Simulator renders blank. That is the PCI protection working. For simulator development only, pass <code>dangerouslyDisableScreenProtection: true</code> to <code>configure(...)</code>; <code>WirexThreeDS.instance.configure(dangerouslyDisableScreenProtection: true)</code> is the same switch for the 3-D Secure challenge (no <code>FLAG_SECURE</code> on Android, no cover while the screen is recorded on iOS). Never ship it on.</div>
 </section>
 <section id="collect-creds">
 <h2><span class="num">04</span>Collect {creds}</h2>
