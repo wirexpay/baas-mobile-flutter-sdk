@@ -17,6 +17,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:wirex_mobile_sdk/wirex_mobile_sdk.dart';
 
+import 'diag_log.dart';
+
 /// Outcome of merging a pasted document.
 sealed class ConfigOutcome {
   const ConfigOutcome();
@@ -30,6 +32,24 @@ class ConfigMerged extends ConfigOutcome {
 class ConfigRejected extends ConfigOutcome {
   const ConfigRejected(this.reason);
   final String reason;
+}
+
+/// What [LiveConfig.applySeedLinkDetailed] did: the KEY NAMES it set, or why it set nothing. Safe to
+/// show and to log — no value travels in it.
+class SeedLinkOutcome {
+  const SeedLinkOutcome.applied(this.keys) : reason = null;
+  const SeedLinkOutcome.rejected(String this.reason) : keys = const <String>[];
+
+  /// Names of the keys set, in payload order. Empty when rejected.
+  final List<String> keys;
+
+  /// Why nothing was applied; null when [keys] were.
+  final String? reason;
+
+  bool get isApplied => reason == null;
+
+  /// The count, or null when rejected — what [LiveConfig.applySeedLink] returns.
+  int? get applied => isApplied ? keys.length : null;
 }
 
 /// Which look the example shows. The EXAMPLE's own policy, not the SDK's: `system` is resolved here
@@ -95,7 +115,14 @@ class LiveConfig extends ChangeNotifier {
     } else {
       _credentials[key] = value;
     }
-    if (notify) credentialsRevision.value++;
+    if (!notify) return;
+    // Logged on commit only (blur / switch / chip), never per keystroke — and never the value.
+    DiagLog.instance.config(switch (key) {
+      'environment' => 'environment switched to ${value.isEmpty ? 'test' : value}',
+      'disableScreenProtection' => 'screen-capture protection ${value == 'true' ? 'OFF' : 'ON'}',
+      _ => value.isEmpty ? 'cleared $key' : 'set $key (${value.length} chars)',
+    });
+    credentialsRevision.value++;
   }
 
   /// The SDK environment NAME the Config tab selected, defaulting to `test`. A name, never a URL.
@@ -113,38 +140,60 @@ class LiveConfig extends ChangeNotifier {
 
   /// Applies a `wirexqa://seed?d=<base64url(JSON)>` link — the deep link the example registers — from
   /// the launch URI or from text pasted into the Config tab. Returns how many values were set, or null
-  /// when [uri] is not a seed link (other scheme or host, no `d`, undecodable). Any key is applied, the
-  /// bearer and action token included; the payload is one base64 param (no `&`/`+` to mangle). A real
-  /// integration mints these from its own auth and the user's wallet; this only saves typing on a test
-  /// device — every value stays in memory only.
-  int? applySeedLink(Uri? uri) {
-    // `wirexqa-flutter://` is this example's own scheme (iOS opens ONE app per scheme, so each example
-    // has one); `wirexqa://` is the shared one every example also registers.
-    if (uri == null || !(uri.scheme == 'wirexqa' || uri.scheme == 'wirexqa-flutter') || uri.host != 'seed') return null;
-    final String? d = uri.queryParameters['d'];
-    if (d == null || d.isEmpty) return null;
-    try {
-      final Map<String, dynamic> json =
-          jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(d)))) as Map<String, dynamic>;
-      int applied = 0;
-      json.forEach((String rawKey, dynamic value) {
-        if (value == null || '$value'.isEmpty) return;
-        setCredential(_seedAliases[rawKey] ?? rawKey, '$value', notify: false);
-        applied++;
-      });
-      credentialsRevision.value++;
-      return applied;
-    } catch (_) {
-      return null;
+  /// when [uri] is not a seed link (other scheme or host, no `d`, undecodable); [applySeedLinkDetailed]
+  /// says which. Any key is applied, the bearer and action token included; the payload is one base64
+  /// param (no `&`/`+` to mangle). A real integration mints these from its own auth and the user's
+  /// wallet; this only saves typing on a test device — every value stays in memory only.
+  int? applySeedLink(Uri? uri) => applySeedLinkDetailed(uri).applied;
+
+  /// The schemes this example answers to: `wirexqa-flutter://` is its own (iOS opens ONE app per
+  /// scheme, so each example has one); `wirexqa://` is the shared one every example also registers.
+  static const List<String> seedSchemes = <String>['wirexqa', 'wirexqa-flutter'];
+
+  /// [applySeedLink] with the reason for a refusal and the names of the keys it set. Nothing it
+  /// returns carries a value.
+  SeedLinkOutcome applySeedLinkDetailed(Uri? uri) {
+    if (uri == null) return const SeedLinkOutcome.rejected('not a URL');
+    if (!seedSchemes.contains(uri.scheme)) {
+      return SeedLinkOutcome.rejected(
+          "scheme '${uri.scheme}' is not accepted by this example (accepts: ${seedSchemes.join(', ')})");
     }
+    if (uri.host != 'seed') return SeedLinkOutcome.rejected("host is '${uri.host}', expected seed");
+    final String? d = uri.queryParameters['d'];
+    if (d == null || d.isEmpty) return const SeedLinkOutcome.rejected('no d= parameter');
+    final String decoded;
+    try {
+      decoded = utf8.decode(base64Url.decode(base64Url.normalize(d)));
+    } catch (_) {
+      return const SeedLinkOutcome.rejected('base64 decode failed');
+    }
+    final Map<String, dynamic> json;
+    try {
+      json = jsonDecode(decoded) as Map<String, dynamic>;
+    } catch (e) {
+      return SeedLinkOutcome.rejected('JSON parse failed: ${e is FormatException ? e.message : e}');
+    }
+    final List<String> keys = <String>[];
+    json.forEach((String rawKey, dynamic value) {
+      if (value == null || '$value'.isEmpty) return;
+      final String key = _seedAliases[rawKey] ?? rawKey;
+      setCredential(key, '$value', notify: false);
+      keys.add(key);
+    });
+    credentialsRevision.value++;
+    return SeedLinkOutcome.applied(keys);
   }
 
   /// [applySeedLink] for text pasted into the Config tab.
-  int? applySeedLinkText(String text) => applySeedLink(Uri.tryParse(text.trim()));
+  int? applySeedLinkText(String text) => applySeedLinkTextDetailed(text).applied;
+
+  /// [applySeedLinkDetailed] for text pasted into the Config tab.
+  SeedLinkOutcome applySeedLinkTextDetailed(String text) => applySeedLinkDetailed(Uri.tryParse(text.trim()));
 
   /// Clears every credential / identity value back to empty (environment falls back to `test`).
   void resetCredentials() {
     _credentials.clear();
+    DiagLog.instance.config('reset all');
     credentialsRevision.value++;
   }
 
@@ -176,6 +225,7 @@ class LiveConfig extends ChangeNotifier {
       return const ConfigRejected('no recognised keys');
     }
     var summary = 'merged: ${(applied..sort()).join(', ')}';
+    DiagLog.instance.config('pasted JSON: $summary');
     if (cleared.isNotEmpty) summary += ' · CLEARED: ${(cleared..sort()).join(', ')}';
     // Named rather than ignored: a typo in a key would otherwise look like a successful paste.
     if (unknown.isNotEmpty) summary += ' · IGNORED unknown: ${(unknown..sort()).join(', ')}';
@@ -236,6 +286,7 @@ class LiveConfig extends ChangeNotifier {
 
   /// Replaces both maps outright. What a preset button does — a merge would leave the last one on.
   void setAppearance(Map<String, Object?> light, Map<String, Object?> dark) {
+    DiagLog.instance.config('appearance replaced: light ${light.length} tokens, dark ${dark.length} tokens');
     _lightTokens
       ..clear()
       ..addAll(light);
@@ -252,6 +303,7 @@ class LiveConfig extends ChangeNotifier {
   ConfigOutcome applyAppearance(String json, bool osIsDark) {
     final parsed = _parse(json);
     if (parsed == null) return const ConfigRejected('not valid JSON');
+    DiagLog.instance.config('appearance merged (${isDarkMode(osIsDark) ? 'dark' : 'light'}): ${(parsed.keys.toList()..sort()).join(', ')}');
     if (isDarkMode(osIsDark)) {
       _darkTokens.addAll(parsed);
     } else {
@@ -262,6 +314,7 @@ class LiveConfig extends ChangeNotifier {
   }
 
   void resetAppearance() {
+    DiagLog.instance.config('appearance reset');
     _lightTokens.clear();
     _darkTokens.clear();
     _publishAppearance();

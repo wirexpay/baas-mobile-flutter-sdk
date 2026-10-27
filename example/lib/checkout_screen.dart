@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:wirex_mobile_sdk/wirex_mobile_sdk.dart';
 
+import 'diag_log.dart';
 import 'event_log.dart';
 import 'live_config.dart';
 import 'quote_fields.dart';
@@ -119,6 +120,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   /// view, the launch URL carries only the quote + provider NAME — the hosted page resolves the
   /// provider block itself — so no provider-config JSON is needed here.
   Future<void> _launchCustomTab() async {
+    DiagLog.instance.tap('Wallet: Launch in Custom Tab tapped');
     final QuoteParse quoteParse = parseQuoteFields(
       estimationId: _estimationId.text,
       sourceAmount: _sourceAmount.text,
@@ -128,12 +130,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       ttlSeconds: _ttlSeconds.text,
     );
     if (quoteParse is QuoteParseError) {
+      DiagLog.instance.err('wallet quote: ${quoteParse.message}');
       setState(() => _note = 'quote: ${quoteParse.message}');
       return;
     }
     final String token = _checkoutToken.text.trim();
     final String provider = _provider.text.trim();
+    DiagLog.instance.app('wallet launch: checkout token ${token.length} chars, provider=$provider');
     if (token.isEmpty || provider.isEmpty) {
+      DiagLog.instance.err('wallet launch: checkout token or provider missing');
       setState(() => _note = 'Custom Tab: set a checkout token and the estimate\'s provider name');
       return;
     }
@@ -150,10 +155,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     // The fragment carries the token — log only the part before it.
     setState(() => _events.add(_stamp('opening Custom Tab: ${url.split('#').first}#<redacted>')));
     final bool ok = await launchUrl(Uri.parse(url), mode: LaunchMode.inAppBrowserView);
+    DiagLog.instance.app('wallet Custom Tab ${ok ? 'opened' : 'could not open'}');
     if (!ok && mounted) setState(() => _note = 'could not open a Custom Tab on this device');
   }
 
   String _stamp(String line) {
+    DiagLog.instance.sdk('wallet: $line');
     final DateTime now = DateTime.now();
     String pad(int value) => value.toString().padLeft(2, '0');
     return '${pad(now.hour)}:${pad(now.minute)}:${pad(now.second)}  $line';
@@ -162,6 +169,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   ({WirexWalletQuote quote, WirexWalletProviderConfig config})? _parseInputs() {
     final TopupParse provider = parseTopup(_providerJson.text);
     if (provider is TopupParseError) {
+      DiagLog.instance.err('wallet provider config: ${provider.message}');
       setState(() => _note = 'provider config: ${provider.message}');
       return null;
     }
@@ -174,6 +182,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       ttlSeconds: _ttlSeconds.text,
     );
     if (quote is QuoteParseError) {
+      DiagLog.instance.err('wallet quote: ${quote.message}');
       setState(() => _note = 'quote: ${quote.message}');
       return null;
     }
@@ -187,6 +196,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   // the estimation id. Pricing a top-up is the partner backend's job; this is a convenience to verify
   // a token and get a real id without a backend. The SDK only consumes the id.
   Future<void> _fetchEstimate() async {
+    DiagLog.instance.tap('Wallet: Fetch estimate tapped');
     final String base =
         LiveConfig.instance.credential('baasApiUrl').trim().replaceAll(RegExp(r'/+$'), '');
     final String bearer = LiveConfig.instance.credential('bearer');
@@ -246,11 +256,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         throw 'POST /cards/topup/estimate → HTTP ${est.statusCode}: ${est.body}';
       }
       final String id = (jsonDecode(est.body) as Map<String, dynamic>)['estimation_id'] as String;
+      DiagLog.instance.app('wallet estimate ok: ${id.length} chars');
       setState(() {
         _estimationId.text = id;
         _note = 'estimate: $id';
       });
     } catch (e) {
+      DiagLog.instance.err('wallet estimate failed: $e');
       setState(() => _note = 'estimate failed: $e');
     }
   }
@@ -266,6 +278,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   void _mount() {
+    DiagLog.instance.tap('Wallet: Mount checkout tapped');
     final ({WirexWalletQuote quote, WirexWalletProviderConfig config})? parsed = _parseInputs();
     if (parsed == null) return;
     setState(() {
@@ -279,6 +292,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Future<void> _rearm() async {
+    DiagLog.instance.tap('Wallet: New quote (rearm) tapped');
     final WirexWalletCheckoutController? controller = _controller;
     if (controller == null || controller.isDestroyed) {
       setState(() => _note = 'nothing mounted — press "Mount checkout" first');
@@ -295,6 +309,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   void _unmount() {
+    DiagLog.instance.tap('Wallet: Unmount tapped');
     setState(() {
       _quote = null;
       _providerConfig = null;
@@ -351,7 +366,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 spacing: 8,
                 children: <Widget>[
                   OutlinedButton(
-                    onPressed: () => setState(() => _providerJson.text = sampleTopupJson),
+                    onPressed: () {
+                      DiagLog.instance.tap('Wallet: Sample (shape only) tapped');
+                      setState(() => _providerJson.text = sampleTopupJson);
+                    },
                     child: const Text('Sample (shape only)'),
                   ),
                 ],

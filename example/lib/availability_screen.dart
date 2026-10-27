@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:wirex_mobile_sdk/wirex_mobile_sdk.dart';
 
+import 'diag_log.dart';
 import 'memory_cache.dart';
 import 'sample_config.dart';
 
@@ -52,12 +53,14 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
   }
 
   String _stamp(String line) {
+    DiagLog.instance.sdk('availability: $line');
     final DateTime now = DateTime.now();
     String pad(int value) => value.toString().padLeft(2, '0');
     return '${pad(now.hour)}:${pad(now.minute)}:${pad(now.second)}  $line';
   }
 
   Future<void> _start() async {
+    DiagLog.instance.tap('Availability: Start tapped');
     setState(() {
       _starting = true;
       _log.add(_stamp('start() — cache read first, then one fresh probe per process'));
@@ -76,6 +79,7 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
   }
 
   Future<void> _stop() async {
+    DiagLog.instance.tap('Availability: Stop tapped');
     await _checker.stop();
     if (!mounted) return;
     setState(() => _log.add(_stamp('stop() — current keeps its value')));
@@ -112,6 +116,7 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
               OutlinedButton(onPressed: _stop, child: const Text('Stop')),
               OutlinedButton(
                 onPressed: () {
+                  DiagLog.instance.tap('Availability: Clear cache tapped');
                   widget.cache.clear();
                   setState(() => _log.add(_stamp(
                       'cache cleared — a fresh install: next process start probes with no cache')));
