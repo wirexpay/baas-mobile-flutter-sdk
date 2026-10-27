@@ -59,17 +59,15 @@ enum Diagnostics {
     ]
   }
 
-  /// This process's unified-log entries since launch: the SDK's (subsystem or message naming Wirex)
-  /// when there are any, otherwise everything the process logged. Capped at 4000 lines.
+  /// This process's unified-log entries since launch: the SDK's (a `com.wirexapp` subsystem),
+  /// capped at 4000 lines. Other entries are left out unless they are errors or faults.
   static func ownLog() -> String {
     do {
       let store = try OSLogStore(scope: .currentProcessIdentifier)
       let entries = try store.getEntries(at: store.position(date: launchDate)).compactMap { $0 as? OSLogEntryLog }
-      let wirex = entries.filter {
-        $0.subsystem.range(of: "wirex", options: .caseInsensitive) != nil
-          || $0.composedMessage.range(of: "wirex", options: .caseInsensitive) != nil
-      }
-      let chosen = (wirex.isEmpty ? entries : wirex).suffix(4000)
+      let wirex = entries.filter { $0.subsystem.range(of: "wirex", options: .caseInsensitive) != nil || $0.level == .error || $0.level == .fault }
+      if wirex.isEmpty { return "(no SDK entry and no error in the unified log this run; \(entries.count) system entries omitted)" }
+      let chosen = wirex.suffix(4000)
       let clock = DateFormatter()
       clock.dateFormat = "HH:mm:ss.SSS"
       return chosen.map { "\(clock.string(from: $0.date)) \($0.subsystem)/\($0.category): \($0.composedMessage)" }

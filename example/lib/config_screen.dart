@@ -223,22 +223,26 @@ class _ConfigScreenState extends State<ConfigScreen> {
             _group(_secrets),
             _section('Screen capture'),
             _card(<Widget>[
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Screen-capture protection (FLAG_SECURE)',
-                    style: TextStyle(color: _P.text, fontSize: 14, fontWeight: FontWeight.w600)),
-                subtitle: const Text(
-                  'On — card data is HIDDEN from screenshots / screen-recording on Reveal, Collect & 3DS '
-                  '(the secure default).\n'
-                  'Off — data is VISIBLE so QA can capture it for a test.',
-                  style: TextStyle(color: _P.textDim, fontSize: 11),
+              // Its own Material: the card's decoration would otherwise hide the tile's ink.
+              Material(
+                type: MaterialType.transparency,
+                child: SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Screen-capture protection (FLAG_SECURE)',
+                      style: TextStyle(color: _P.text, fontSize: 14, fontWeight: FontWeight.w600)),
+                  subtitle: const Text(
+                    'On — card data is HIDDEN from screenshots / screen-recording on Reveal, Collect & 3DS '
+                    '(the secure default).\n'
+                    'Off — data is VISIBLE so QA can capture it for a test.',
+                    style: TextStyle(color: _P.textDim, fontSize: 11),
+                  ),
+                  value: !LiveConfig.instance.disableScreenProtection,
+                  onChanged: (bool protect) {
+                    DiagLog.instance.tap('Config: Screen-capture protection switched ${protect ? 'on' : 'off'}');
+                    LiveConfig.instance.setCredential('disableScreenProtection', protect ? 'false' : 'true');
+                    setState(() {});
+                  },
                 ),
-                value: !LiveConfig.instance.disableScreenProtection,
-                onChanged: (bool protect) {
-                  DiagLog.instance.tap('Config: Screen-capture protection switched ${protect ? 'on' : 'off'}');
-                  LiveConfig.instance.setCredential('disableScreenProtection', protect ? 'false' : 'true');
-                  setState(() {});
-                },
               ),
             ]),
             _section('Credentials status'),

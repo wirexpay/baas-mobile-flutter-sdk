@@ -22,6 +22,7 @@ class DiagLog extends ChangeNotifier {
   static const int maxLines = 2000;
 
   final List<String> _lines = <String>[];
+  String? _lastBody;
 
   /// Every line, oldest first.
   List<String> get lines => List<String>.unmodifiable(_lines);
@@ -30,11 +31,29 @@ class DiagLog extends ChangeNotifier {
 
   /// Lines from `[tag]` sources: `app`, `link`, `config`, `tap`, `kbd`, `sdk`, `err`.
   void append(String tag, String message) {
-    final String line = '${_stamp(DateTime.now())} [$tag] ${redact(message)}';
+    final String body = '[$tag] ${redact(message)}';
+    // The same event twice in a row (a framework warning on every rebuild) is one line.
+    if (body == _lastBody) return;
+    _lastBody = body;
+    final String line = '${_stamp(DateTime.now())} $body';
     _lines.add(line);
     if (_lines.length > maxLines) _lines.removeRange(0, _lines.length - maxLines);
     debugPrint('[diag] $line');
-    notifyListeners();
+    _notify();
+  }
+
+  bool _notifyScheduled = false;
+
+  /// Listeners rebuild widgets, and a line can be logged while the framework is building (a
+  /// FlutterError report, a widget's own log call), so listeners hear about lines in a microtask:
+  /// after the current synchronous build, once per burst.
+  void _notify() {
+    if (_notifyScheduled) return;
+    _notifyScheduled = true;
+    scheduleMicrotask(() {
+      _notifyScheduled = false;
+      notifyListeners();
+    });
   }
 
   void app(String message) => append('app', message);
@@ -47,7 +66,8 @@ class DiagLog extends ChangeNotifier {
 
   void clear() {
     _lines.clear();
-    notifyListeners();
+    _lastBody = null;
+    _notify();
   }
 
   /// The text the Share and Copy buttons hand out: a header, every line, then the native log.

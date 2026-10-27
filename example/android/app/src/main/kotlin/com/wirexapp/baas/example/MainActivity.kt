@@ -49,7 +49,13 @@ class MainActivity : FlutterActivity() {
         val process = ProcessBuilder("logcat", "-d", "-v", "time", "--pid=${Process.myPid()}", "-t", "4000")
             .redirectErrorStream(true)
             .start()
-        process.inputStream.bufferedReader().use { it.readText() }
+        val lines = process.inputStream.bufferedReader().use { it.readLines() }
+        // The SDK's own tags (`Wirex…`), plus every error and crash; the system's chatter is left out.
+        val kept = lines.filter { line ->
+            val level = Regex("""\s([VDIWEF])/""").find(line)?.groupValues?.get(1)
+            line.contains("/Wirex", ignoreCase = true) || level == "E" || level == "F"
+        }
+        "(${kept.size} SDK / error lines of ${lines.size})\n" + kept.joinToString("\n")
     } catch (e: Exception) {
         "logcat unavailable: ${e.javaClass.simpleName}: ${e.message}"
     }
