@@ -50,5 +50,13 @@ void main() {
       expect(config.applySeedLinkTextDetailed('wirexqa://seed?d=!!!').reason, 'base64 decode failed');
       expect(config.applySeedLinkTextDetailed('wirexqa://seed?d=bm90IGpzb24').reason, startsWith('JSON parse failed'));
     });
+
+    test('a cut-short link is reported by length, never by its content', () {
+      // The JSON stops mid-value, as when a field or a chat truncates the link.
+      final String? reason = config.applySeedLinkTextDetailed('wirexqa://seed?d=eyJjaGFpbklkIjoiMSIsImJlYXJlciI6ImRvLW5vdC1lY2hvLXRoaXM').reason;
+      expect(reason, startsWith('JSON parse failed: the link looks cut short'));
+      expect(reason, isNot(contains('do-not-echo-this')));
+      expect(reason, isNot(contains('bearer')));
+    });
   });
 }

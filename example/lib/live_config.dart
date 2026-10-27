@@ -171,7 +171,9 @@ class LiveConfig extends ChangeNotifier {
     try {
       json = jsonDecode(decoded) as Map<String, dynamic>;
     } catch (e) {
-      return SeedLinkOutcome.rejected('JSON parse failed: ${e is FormatException ? e.message : e}');
+      // SECURITY: never the parser's message — it quotes the decoded payload, bearer included.
+      return SeedLinkOutcome.rejected(
+          'JSON parse failed: the link looks cut short (${uri.toString().length} chars, ${decoded.length} decoded) — copy the whole link again');
     }
     final List<String> keys = <String>[];
     json.forEach((String rawKey, dynamic value) {
