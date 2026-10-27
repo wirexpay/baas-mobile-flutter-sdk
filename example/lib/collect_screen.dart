@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:wirex_mobile_sdk/wirex_mobile_sdk.dart';
 
+import 'diag_log.dart';
 import 'live_config.dart';
 
 /// The card-ENTRY screen, on the sibling package.
@@ -64,12 +65,18 @@ class _CollectScreenState extends State<CollectScreen> {
   );
 
   Future<void> _tokenize() async {
+    DiagLog.instance.tap('Collect: Tokenize tapped (profile=${_profile.name} complete=${_state.isComplete} '
+        'brand=${_state.brand} configured=${widget.configured} controller=${_controller != null})');
     final controller = _controller;
-    if (controller == null) return;
+    if (controller == null) {
+      DiagLog.instance.err('Collect: tokenize skipped — no form controller yet');
+      return;
+    }
     setState(() {
       _submitting = true;
       _result = 'submitting…';
     });
+    DiagLog.instance.sdk('collect tokenize started (${_profile == WirexCollectProfile.topup ? 'topup' : 'oct-destination'})');
     try {
       if (_profile == WirexCollectProfile.topup) {
         // A real host collects a billing address in its own UI: it is not card data and lives outside
@@ -87,6 +94,7 @@ class _CollectScreenState extends State<CollectScreen> {
         _result = 'linked\ncardId: ${token.cardId}\n'
             '${token.brand} •••• ${token.last4}  bin ${token.bin}\n'
             'expiry: ${token.expiryMonth}/${token.expiryYear}';
+        DiagLog.instance.sdk('collect tokenize ok: cardId ${token.cardId.length} chars, brand=${token.brand} last4=${token.last4}');
       } else {
         final token = await controller.tokenizeOctDestination(
           const WirexOctTokenizeParams(
@@ -97,11 +105,16 @@ class _CollectScreenState extends State<CollectScreen> {
         );
         _result = 'registered\nexternalCardId: ${token.externalCardId}\n'
             '${token.brand} •••• ${token.last4}  bin ${token.bin}';
+        DiagLog.instance.sdk('collect tokenize ok: externalCardId ${token.externalCardId.length} chars, brand=${token.brand} last4=${token.last4}');
       }
     } on WirexCollectError catch (error) {
       // `retryable` is the whole point of the envelope: a transport failure on a CREATING call comes
       // back false, because the card may already exist.
       _result = 'failed: ${error.code} (retryable: ${error.retryable})';
+      DiagLog.instance.err('collect tokenize failed: ${error.code} retryable=${error.retryable}');
+    } catch (error) {
+      _result = 'failed: $error';
+      DiagLog.instance.err('collect tokenize threw: ${error.runtimeType} $error');
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -121,8 +134,10 @@ class _CollectScreenState extends State<CollectScreen> {
     Widget field(WirexCollectField f) => WirexCollectFieldView(
           controller: controller,
           field: f,
-          onUnavailable: (WirexCollectField missing) =>
-              setState(() => _absent.add(missing)),
+          onUnavailable: (WirexCollectField missing) {
+            DiagLog.instance.sdk('collect field unavailable: ${missing.wireName}');
+            setState(() => _absent.add(missing));
+          },
         );
 
     final bool expiry = !_absent.contains(WirexCollectField.expiry);
@@ -175,8 +190,10 @@ class _CollectScreenState extends State<CollectScreen> {
               ),
             ],
             selected: <WirexCollectProfile>{_profile},
-            onSelectionChanged: (Set<WirexCollectProfile> selected) =>
-                setState(() => _profile = selected.first),
+            onSelectionChanged: (Set<WirexCollectProfile> selected) {
+              DiagLog.instance.tap("Collect: profile chip '${selected.first.name}' tapped");
+              setState(() => _profile = selected.first);
+            },
           ),
           const SizedBox(height: 8),
           SegmentedButton<WirexErrorLine>(
@@ -186,8 +203,10 @@ class _CollectScreenState extends State<CollectScreen> {
               ButtonSegment<WirexErrorLine>(value: WirexErrorLine.hidden, label: Text('hidden')),
             ],
             selected: <WirexErrorLine>{_errorLine},
-            onSelectionChanged: (Set<WirexErrorLine> selected) =>
-                setState(() => _errorLine = selected.first),
+            onSelectionChanged: (Set<WirexErrorLine> selected) {
+              DiagLog.instance.tap("Collect: error line '${selected.first.name}' tapped");
+              setState(() => _errorLine = selected.first);
+            },
           ),
           const SizedBox(height: 12),
           // No height: the form reports its own, so the appearance tokens decide it.
@@ -208,9 +227,15 @@ class _CollectScreenState extends State<CollectScreen> {
               errorLine: _errorLine,
               // setState, because the field views below cannot be built until the controller exists
               // — it is what they name the form with.
-              onCreated: (WirexCollectFormController controller) =>
-                  setState(() => _controller = controller),
-            onChange: (WirexCollectState state) => setState(() => _state = state),
+              onCreated: (WirexCollectFormController controller) {
+                DiagLog.instance.sdk('collect form created (profile=${_profile.name})');
+                setState(() => _controller = controller);
+              },
+            onChange: (WirexCollectState state) {
+              DiagLog.instance.sdk('collect state: complete=${state.isComplete} brand=${state.brand} '
+                  '${state.fields.map((f) => '${f.field.wireName}=${f.isValid ? 'ok' : (f.isEmpty ? 'empty' : 'invalid')}').join(' ')}');
+              setState(() => _state = state);
+            },
           ),
           if (_hostPlacement && _controller != null) _placedFields(_controller!),
           SwitchListTile(
@@ -220,6 +245,7 @@ class _CollectScreenState extends State<CollectScreen> {
             // form and giving them back mid-life is not something the SDK supports, and an example
             // should not be the place that finds out.
             onChanged: (bool on) => setState(() {
+              DiagLog.instance.tap('Collect: host placement switched ${on ? 'on' : 'off'}');
               _hostPlacement = on;
               _absent.clear();
               _controller = null;
@@ -242,12 +268,18 @@ class _CollectScreenState extends State<CollectScreen> {
                 child: const Text('Tokenize'),
               ),
               OutlinedButton(
-                onPressed: () => _controller?.clear(),
+                onPressed: () {
+                  DiagLog.instance.tap('Collect: Clear tapped');
+                  final controller = _controller;
+                  if (controller != null) logged(controller.clear(), 'collect clear');
+                },
                 child: const Text('Clear'),
               ),
               OutlinedButton(
                 onPressed: () async {
+                  DiagLog.instance.tap('Collect: Capture state tapped');
                   final protected = await _controller?.isScreenshotProtectionActive() ?? false;
+                  DiagLog.instance.sdk('collect capture-protected: $protected');
                   setState(() => _result = 'capture-protected: $protected');
                 },
                 child: const Text('Capture state'),

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'appearance_screen.dart';
 import 'checkout_screen.dart';
 import 'collect_screen.dart';
 import 'config_screen.dart';
+import 'diag_log.dart';
 import 'example_config.dart';
 import 'live_config.dart';
 import 'memory_cache.dart';
@@ -20,8 +22,25 @@ void main() {
   // NavigationBar sits above the gesture pill / 3-button navigation bar rather than under it.
   // Edge-to-edge is the default from Android 15 (targetSdk 35+); this requests it on every version.
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  // The diagnostic log (Config tab, bottom): lifecycle, keyboard, every tap, every SDK event, every
+  // deep link and why it was or was not applied. Shared with a bug report; never a value.
+  DiagLog.instance.header.addAll(<String, String>{
+    'stack': 'Flutter',
+    'sdk': 'wirex_mobile_sdk $sdkVersion',
+    'platform': '${Platform.operatingSystem} ${Platform.operatingSystemVersion}',
+    'locale': WidgetsBinding.instance.platformDispatcher.locale.toString(),
+  });
+  DiagLog.instance.app('launch: ${DiagLog.instance.header.entries.map((e) => '${e.key}=${e.value}').join(' ')}');
+  WidgetsBinding.instance.addObserver(DiagObserver());
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    DiagLog.instance.err('flutter: ${details.exceptionAsString()}');
+  };
   runApp(const ExampleApp());
 }
+
+/// The SDK version this example was built against (pubspec.lock). Shown in the diagnostic log's header.
+const String sdkVersion = '0.3.15';
 
 /// What a partner application has to implement.
 ///
@@ -94,6 +113,7 @@ class _Tabs extends StatefulWidget {
 }
 
 class _TabsState extends State<_Tabs> {
+  static const List<String> _tabNames = <String>['Config', 'Reveal', 'Collect', '3DS', 'Wallet', 'Appearance'];
   int _index = 0;
   bool _collectConfigured = false;
 
@@ -118,15 +138,38 @@ class _TabsState extends State<_Tabs> {
     // user's wallet; nothing is compiled into the binary (there are no secret `--dart-define`s). The
     // Config tab has a field for the same link, for a device where opening it is awkward.
     final AppLinks links = AppLinks();
-    links.getInitialLink().then(_applySeedLink);
-    _seedSub = links.uriLinkStream.listen(_applySeedLink);
+    links.getInitialLink().then((Uri? uri) {
+      if (uri == null) {
+        DiagLog.instance.link('initial link: none');
+      } else {
+        _initialLink = uri.toString();
+        _applySeedLink(uri, 'initial');
+      }
+    }, onError: (Object e) => DiagLog.instance.err('initial link: $e'));
+    _seedSub = links.uriLinkStream.listen((Uri uri) {
+      // On a cold start Android reports the launch link on BOTH paths; apply it once.
+      if (uri.toString() == _initialLink) {
+        _initialLink = null;
+        DiagLog.instance.link('stream repeated the initial link — ignored');
+        return;
+      }
+      _applySeedLink(uri, 'url');
+    }, onError: (Object e) => DiagLog.instance.err('link stream: $e'));
     _configureCollect();
     _bootstrapWallet();
   }
 
   StreamSubscription<Uri>? _seedSub;
+  String? _initialLink;
 
-  void _applySeedLink(Uri? uri) => LiveConfig.instance.applySeedLink(uri);
+  /// Logs the link (scheme, host, LENGTH — never the payload) and what applying it did.
+  void _applySeedLink(Uri uri, String source) {
+    DiagLog.instance.link('received ${uri.scheme}://${uri.host} (${uri.toString().length} chars) source=$source');
+    final SeedLinkOutcome outcome = LiveConfig.instance.applySeedLinkDetailed(uri);
+    DiagLog.instance.link(outcome.isApplied
+        ? 'applied ${outcome.keys.length} values: ${outcome.keys.join(',')}'
+        : 'rejected: ${outcome.reason}');
+  }
 
   String _collectConfigKey = '';
   String _walletEnvironment = '';
@@ -149,8 +192,10 @@ class _TabsState extends State<_Tabs> {
       switch (result) {
         case ExampleBootstrapReady(:final config):
           _walletConfig = config;
+          DiagLog.instance.sdk('wallet environment resolved: ${config.environment.name}');
         case ExampleBootstrapFailed(:final reason):
           _walletError = reason;
+          DiagLog.instance.err('wallet bootstrap failed: $reason');
       }
     });
   }
@@ -197,8 +242,10 @@ class _TabsState extends State<_Tabs> {
         accessToken: () async => LiveConfig.instance.credential('bearer'),
         dangerouslyDisableScreenProtection: LiveConfig.instance.disableScreenProtection,
       );
+      DiagLog.instance.sdk('collect configured (testMode=${LiveConfig.instance.isTestMode}, chainId ${LiveConfig.instance.credential('chainId').length} chars, protection ${LiveConfig.instance.disableScreenProtection ? 'off' : 'on'})');
       if (mounted) setState(() => _collectConfigured = true);
-    } on PlatformException {
+    } on PlatformException catch (error) {
+      DiagLog.instance.err('collect configure failed: ${error.code} ${error.message ?? ''}');
       if (mounted) setState(() => _collectConfigured = false);
     }
   }
@@ -235,6 +282,7 @@ class _TabsState extends State<_Tabs> {
     bottomNavigationBar: NavigationBar(
       selectedIndex: _index,
       onDestinationSelected: (int index) {
+        DiagLog.instance.app('tab switched: ${_tabNames[index]}');
         setState(() => _index = index);
       },
       destinations: const <NavigationDestination>[
@@ -401,7 +449,12 @@ class _RevealScreenState extends State<RevealScreen> {
           Align(
             alignment: Alignment.centerLeft,
             child: FilledButton(
-              onPressed: _configuring ? null : _configure,
+              onPressed: _configuring
+                  ? null
+                  : () {
+                      DiagLog.instance.tap('Reveal: Configure tapped');
+                      logged(_configure(), 'reveal configure');
+                    },
               child: const Text('Configure'),
             ),
           ),
@@ -445,8 +498,10 @@ class _RevealScreenState extends State<RevealScreen> {
         dangerouslyDisableScreenProtection: LiveConfig.instance.disableScreenProtection,
       );
       _lastConfigKey = '${LiveConfig.instance.isTestMode}|${LiveConfig.instance.credential('chainId')}|${LiveConfig.instance.disableScreenProtection}';
+      DiagLog.instance.sdk('reveal configured (testMode=${LiveConfig.instance.isTestMode}, protection ${LiveConfig.instance.disableScreenProtection ? 'off' : 'on'})');
       await _createSession();
     } catch (error) {
+      DiagLog.instance.err('reveal configure failed: ${error.runtimeType} $error');
       if (mounted) setState(() => _configureError = '$error');
     } finally {
       if (mounted) setState(() => _configuring = false);
@@ -468,7 +523,11 @@ class _RevealScreenState extends State<RevealScreen> {
       // but saying "absent" by passing absent is what a host should copy from an example.
       cardholderName: _nullIfBlank(LiveConfig.instance.credential('cardholderName')),
     );
-    session.onSnapshot((snapshot) => setState(() => _snapshot = snapshot));
+    session.onSnapshot((snapshot) {
+      DiagLog.instance.sdk('reveal snapshot: ${snapshot.state.name} ${snapshot.fields.map((f) => '${f.field.wireName}=${f.outcome.name}').join(' ')}');
+      setState(() => _snapshot = snapshot);
+    });
+    DiagLog.instance.sdk('reveal session created (cardId ${LiveConfig.instance.credential('cardId').length} chars)');
     setState(() {
       _session = session;
       _snapshot = session.snapshot;
@@ -536,9 +595,12 @@ class _RevealScreenState extends State<RevealScreen> {
                   // events). Under the SDK's default that re-masks a row the user is coming straight
                   // back to. A detach here is a hand-off, not a loss of custody.
                   masksWhenDetached: false,
-                  onCopyResult: (copied) =>
-                      setState(() => _note = copied ? 'Copied ${field.wireName}' : 'Copy refused'),
+                  onCopyResult: (copied) {
+                    DiagLog.instance.sdk('reveal copy ${field.wireName}: ${copied ? 'copied' : 'refused'}');
+                    setState(() => _note = copied ? 'Copied ${field.wireName}' : 'Copy refused');
+                  },
                   onMaskedChange: (masked, protectionActive) => setState(() {
+                    DiagLog.instance.sdk('reveal ${field.wireName} masked=$masked protectionActive=$protectionActive');
                     // The host's intent is NOT touched here — see `_refused`. What arrived is "the
                     // row is masked right now", and the reason is outside the user's control: the
                     // screen is being recorded, mirrored or AirPlayed. The request is still held by
@@ -571,19 +633,48 @@ class _RevealScreenState extends State<RevealScreen> {
           Wrap(
             spacing: 8,
             children: <Widget>[
-              FilledButton(onPressed: session?.load, child: const Text('Load')),
+              FilledButton(
+                onPressed: session == null
+                    ? null
+                    : () {
+                        DiagLog.instance.tap('Reveal: Load tapped');
+                        logged(session.load(), 'reveal load');
+                      },
+                child: const Text('Load'),
+              ),
               OutlinedButton(
-                onPressed: () => setState(() => _setMaskedAll(false)),
+                onPressed: () {
+                  DiagLog.instance.tap('Reveal: Reveal tapped');
+                  setState(() => _setMaskedAll(false));
+                },
                 child: const Text('Reveal'),
               ),
               OutlinedButton(
-                onPressed: () => setState(() => _setMaskedAll(true)),
+                onPressed: () {
+                  DiagLog.instance.tap('Reveal: Mask tapped');
+                  setState(() => _setMaskedAll(true));
+                },
                 child: const Text('Mask'),
               ),
-              OutlinedButton(onPressed: session?.clear, child: const Text('Clear')),
-              OutlinedButton(onPressed: _createSession, child: const Text('New session')),
+              OutlinedButton(
+                onPressed: session == null
+                    ? null
+                    : () {
+                        DiagLog.instance.tap('Reveal: Clear tapped');
+                        logged(session.clear(), 'reveal clear');
+                      },
+                child: const Text('Clear'),
+              ),
+              OutlinedButton(
+                onPressed: () {
+                  DiagLog.instance.tap('Reveal: New session tapped');
+                  logged(_createSession(), 'reveal new session');
+                },
+                child: const Text('New session'),
+              ),
               OutlinedButton(
                 onPressed: () => setState(() {
+                  DiagLog.instance.tap('Reveal: Decline next tapped');
                   _credentials?.declineNextActionToken = true;
                   _note = 'The next action-token will be declined';
                 }),

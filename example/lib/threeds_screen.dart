@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:wirex_mobile_sdk/wirex_mobile_sdk.dart';
 
+import 'diag_log.dart';
 import 'live_config.dart';
 
 /// The 3DS step-up, end to end, with the orchestrator URL pasted in.
@@ -55,6 +56,10 @@ class _ThreeDSScreenState extends State<ThreeDSScreen> {
   }
 
   Future<void> _start() async {
+    final Uri? target = Uri.tryParse(_url.text.trim());
+    // SECURITY: the orchestrator URL carries the backend's session token — the log gets its origin only.
+    DiagLog.instance.tap('3DS: ${_settled ? 'Start another' : 'Start step-up'} tapped '
+        '(url ${target == null || !target.hasScheme ? 'not a URL' : '${target.scheme}://${target.host}'}, ${_url.text.length} chars)');
     try {
       // `testMode` and the Screen capture switch are read at configure time: reconfigure when the
       // Config tab changed either.
@@ -70,10 +75,12 @@ class _ThreeDSScreenState extends State<ThreeDSScreen> {
           // read. Off = the challenge is visible to screenshots and recording (device clouds).
           dangerouslyDisableScreenProtection: disableProtection,
         );
+        DiagLog.instance.sdk('3DS configure (testMode=$testMode, protection ${disableProtection ? 'off' : 'on'})');
       }
       await _configured;
       final previous = _session;
       final session = await WirexThreeDS.instance.createSession(_url.text);
+      DiagLog.instance.sdk('3DS session created: ${session.sessionId}');
       session.onSnapshot(_render);
       _render(session.snapshot);
       setState(() => _session = session);
@@ -81,6 +88,7 @@ class _ThreeDSScreenState extends State<ThreeDSScreen> {
       // After the frame that mounts the view with this session.
       WidgetsBinding.instance.addPostFrameCallback((_) => session.start());
     } on PlatformException catch (error) {
+      DiagLog.instance.err('3DS could not start: ${error.code} ${error.message ?? ''}');
       setState(() => _status = 'could not start: ${error.message}');
     }
   }
@@ -100,6 +108,7 @@ class _ThreeDSScreenState extends State<ThreeDSScreen> {
         lines.add('error: none');
       }
     }
+    DiagLog.instance.sdk('3DS ${lines.join(' ')}');
     if (!mounted) return;
     setState(() {
       // `cancel()` does nothing once the session has settled, so the button is disabled then.
@@ -135,7 +144,12 @@ class _ThreeDSScreenState extends State<ThreeDSScreen> {
                   ),
                   const SizedBox(width: 16),
                   TextButton(
-                    onPressed: session == null || _settled ? null : session.cancel,
+                    onPressed: session == null || _settled
+                        ? null
+                        : () {
+                            DiagLog.instance.tap('3DS: Cancel tapped');
+                            logged(session.cancel(), '3DS cancel');
+                          },
                     child: const Text('Cancel'),
                   ),
                 ],

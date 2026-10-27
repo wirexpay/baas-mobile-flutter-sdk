@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import 'diag_log.dart';
 import 'live_config.dart';
 
 /// One place to restyle every field on both surfaces.
@@ -172,6 +173,7 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
   }
 
   void _applyPreset(_Preset preset) {
+    DiagLog.instance.tap("Appearance: preset '${preset.name}' tapped");
     LiveConfig.instance.setAppearance(preset.light, preset.dark);
     // BOTH documents are replaced; the editor shows whichever the device is asking for.
     _tokens.text = _pretty(_osIsDark(context) ? preset.dark : preset.light);
@@ -238,13 +240,15 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
             spacing: 8,
             children: <Widget>[
               OutlinedButton(
-                onPressed: () => _report(
-                  LiveConfig.instance.applyAppearance(_tokens.text, _osIsDark(context)),
-                ),
+                onPressed: () {
+                  DiagLog.instance.tap('Appearance: Apply tapped');
+                  _report(LiveConfig.instance.applyAppearance(_tokens.text, _osIsDark(context)));
+                },
                 child: const Text('Apply'),
               ),
               OutlinedButton(
                 onPressed: () {
+                  DiagLog.instance.tap('Appearance: Reset tapped');
                   LiveConfig.instance.resetAppearance();
                   _tokens.clear();
                   setState(() => _status = 'reset to the SDK defaults');
