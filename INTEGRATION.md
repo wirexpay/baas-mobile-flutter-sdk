@@ -394,6 +394,7 @@ void _show(WirexTradeStepEvent event) {}                            // step, sta
 - **Create.** `WirexTrade.create` takes `testMode` (default `false`, production), `chainId`, `tokenProvider`, `signer` and optional `timeouts`. The main account trades from Base, 8453, or Arc, 5042. The investment account is always on Base.
 - **The key never crosses.** Only the 32-byte hash comes into Dart and only the 65-byte signature goes back. A throw from `signPersonal` fails the step with `signer_failed`, and nothing is sent. A throw or an empty token from `accessToken()` fails the call with `token_unavailable`.
 - **The ended order.** `execute` and `resume` answer an order with `status` `Completed`, `Returned`, `Failed` or `Expired`. A `Failed` order carries its `statusReason`. They throw only when they cannot carry on, and the order then stays open for `resume`.
+- **A refund on Arc.** On an Arc company, a failed or expired buy's refund stays in the investment account. The sweep at the end of `execute` or `resume` brings it back. Until then it shows in `account().cash`.
 - **Resume after a restart.** Keep nothing yourself. `openOrders()` reads what is open, and `resume` rebuilds the rest from the backend and the chain. Pass the quote when you still hold it. A store or an Arc sale's swap that never went needs it, and fails with `quote_required` without it.
 - **Steps.** `onStep` gets one `WirexTradeStepEvent` per change: `step`, `state` (`started`, `done`, `failed`), `orderId`, `status`, `reason`, and on a send the `userOpHash` and `transactionHash`.
 
