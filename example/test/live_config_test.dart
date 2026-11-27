@@ -71,6 +71,69 @@ void main() {
     });
   });
 
+  group('the Trade sources: e2e.local.json, then the Config tab, then a seed link', () {
+    String seed(Map<String, String> payload) =>
+        'wirexqa://seed?d=${base64Url.encode(utf8.encode(jsonEncode(payload))).replaceAll('=', '')}';
+
+    setUp(() {
+      config.resetCredentials();
+      config.clearFileValues();
+    });
+
+    tearDown(config.clearFileValues);
+
+    test('a seed link carrying ownerKey is refused whole', () {
+      final SeedLinkOutcome outcome =
+          config.applySeedLinkTextDetailed(seed(<String, String>{'chainId': '8453', 'ownerKey': '0xfake'}));
+      expect(outcome.isApplied, isFalse);
+      expect(outcome.reason, contains('never carries ownerKey'));
+      expect(outcome.reason, isNot(contains('0xfake')));
+      expect(config.credential('chainId'), '');
+      expect(config.credential('ownerKey'), '');
+    });
+
+    test('the file wins over the Config tab and a seed link', () {
+      config.applyFileText('{"chainId":8453,"companyId":"11111111-1111-1111-1111-111111111111"}');
+      config.setCredential('chainId', '5042');
+      final SeedLinkOutcome outcome = config.applySeedLinkTextDetailed(seed(<String, String>{'companyId': 'other'}));
+      expect(config.credential('chainId'), '8453');
+      expect(config.credential('companyId'), '11111111-1111-1111-1111-111111111111');
+      expect(outcome.skipped, <String>['companyId']);
+      expect(config.fromFile('chainId'), isTrue);
+    });
+
+    test('the Config tab wins over a later seed link, which names what it kept', () {
+      config.setCredential('companyId', 'from-tab');
+      final SeedLinkOutcome outcome =
+          config.applySeedLinkTextDetailed(seed(<String, String>{'companyId': 'from-seed', 'chainId': '8453'}));
+      expect(config.credential('companyId'), 'from-tab');
+      expect(config.credential('chainId'), '8453');
+      expect(outcome.keys, <String>['chainId']);
+      expect(outcome.skipped, <String>['companyId']);
+    });
+
+    test('an empty value on the tab still clears what a seed link set', () {
+      config.applySeedLinkTextDetailed(seed(<String, String>{'bearer': 'from-seed'}));
+      config.setCredential('bearer', '');
+      expect(config.credential('bearer'), '');
+    });
+
+    test('the file reports unknown keys by name and keeps no empty value', () {
+      final ConfigOutcome outcome = config.applyFileText('{"ownerKey":"","chainId":"8453","ownerkey":"0xfake"}');
+      expect((outcome as ConfigMerged).summary, contains('IGNORED: ownerkey'));
+      expect(outcome.summary, isNot(contains('0xfake')));
+      expect(config.fromFile('ownerKey'), isFalse);
+      expect(config.fromFile('chainId'), isTrue);
+    });
+
+    test('the status names where a value came from, never the value', () {
+      config.applyFileText('{"ownerKey":"0x0101010101010101010101010101010101010101010101010101010101010101"}');
+      final String status = config.credentialsStatus();
+      expect(status, contains('ownerKey: set (e2e.local.json)'));
+      expect(status, isNot(contains('0x0101')));
+    });
+  });
+
   group('appearance', () {
     test('each mode gets its own map, and nothing is layered between them', () {
       // `osIsDark` is the ONLY selector now — the example carries no theme choice, because the SDK

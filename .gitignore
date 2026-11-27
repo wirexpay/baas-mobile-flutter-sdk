@@ -2,3 +2,6 @@
 node_modules/
 build/
 .dart_tool/
+# The example's test-only config and the local plugin override. Never committed: the file holds a private key.
+e2e.local.json
+pubspec_overrides.yaml

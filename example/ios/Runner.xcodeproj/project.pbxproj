@@ -201,6 +201,7 @@
 			buildConfigurationList = 97C147051CF9000F007C117D /* Build configuration list for PBXNativeTarget "Runner" */;
 			buildPhases = (
 				3E24F3D40A48843DB2AEBF84 /* [CP] Check Pods Manifest.lock */,
+				E2E1F0C0DE00000000000001 /* Refuse e2e.local.json */,
 				9740EEB61CF901F6004384FC /* Run Script */,
 				97C146EA1CF9000F007C117D /* Sources */,
 				97C146EB1CF9000F007C117D /* Frameworks */,
@@ -354,6 +355,21 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" build";
+		};
+		E2E1F0C0DE00000000000001 /* Refuse e2e.local.json */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Refuse e2e.local.json";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# SECURITY: e2e/e2e.local.json holds a test user's private key, and every build bundles the e2e/ assets.\nif [ \"$CONFIGURATION\" != \"Debug\" ] && [ -e \"$SRCROOT/../e2e/e2e.local.json\" ]; then\n  echo \"error: e2e/e2e.local.json exists: a $CONFIGURATION build would carry its key. Move it away first.\"\n  exit 1\nfi\n";
 		};
 		F16967E261E0D5DAF5A03515 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;

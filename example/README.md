@@ -37,6 +37,7 @@ The Wallet surface takes the same environment name from the Config tab.
 | **Collect** | a sealed form that tokenizes an external funding card at the acquirer |
 | **3DS** | paste a top-up orchestrator URL → the issuer challenge, and the outcome |
 | **Wallet** | the hosted Apple Pay / Google Pay checkout (paste a provider block, build a quote — legacy tokenise flow) |
+| **Trade** | a stock or coin trade: Account, Catalog, Quote, Trade and Open orders, signed by a test user's key |
 | **Appearance** | restyle every sealed surface at once — presets or a pasted token document |
 
 The field contract is the same across the React Native / iOS / Android examples — see
@@ -44,3 +45,54 @@ The field contract is the same across the React Native / iOS / Android examples 
 
 > A revealed value is a native view; on the iOS Simulator the capture-proof layer renders blank (PCI
 > protection, not a bug). The Apple/Google Pay sheet needs a real device; the checkout still arms.
+
+## Run a trade from a local build
+
+The Trade tab signs with a test user's exported private key. Use a test user only, and keep amounts
+small: on `production` the tab refuses a trade worth more than 10 USD.
+
+### Prefill the config from a file
+
+1. Copy `e2e/e2e.example.json` to `e2e/e2e.local.json`. Git ignores the copy.
+2. Fill in `environment`, `chainId`, `companyId`, `baasApiUrl` and `ownerKey`. The example values are fake.
+3. Run a debug build: `flutter run`.
+
+The file wins over the Config tab and a seed link. Only a debug build reads it. A release or profile
+build fails while the file exists, so move it away before you build one. A seed link never carries
+`ownerKey`, and the Config tab keeps it in memory only.
+
+The app gets its bearer from the key. It signs the login message and calls
+`POST /api/v1/user/authorize` at `baasApiUrl`. A `bearer` pasted on the Config tab wins over the login.
+
+### Build against local SDK sources
+
+Until the SDK release with `Trade` is out, the tab builds only against local checkouts of the plugin
+and the native SDKs. Without these steps the example builds against the published package.
+
+1. Point pub at the plugin checkout. Create `example/pubspec_overrides.yaml`, which git ignores:
+
+   ```yaml
+   dependency_overrides:
+     wirex_mobile_sdk:
+       path: <the plugin checkout>/mobile-sdk/flutter
+   ```
+
+2. Point the native builds at the native SDK checkouts:
+   - iOS: `WIREX_IOS_SDK=<iOS SDK checkout> flutter run`. The Podfile then builds the native SDK from
+     its sources.
+   - Android: pick an empty folder for the SDK build, never `~/.m2`, and set `WIREX_SDK_REPO` to it.
+     Step 4 publishes the SDK there.
+3. Write the endpoint table. The native SDKs hold no API addresses in their sources, so a build from
+   source refuses to send without it. In both native checkouts, run `node tools/inject-endpoints.mjs`.
+4. Android only: in the Android SDK checkout, run
+   `./gradlew :mobile-sdk:publishToMavenLocal -Dmaven.repo.local="$WIREX_SDK_REPO"`.
+5. Build and run the example. On Android, run
+   `WIREX_SDK_REPO=<that folder> WIREX_ANDROID_SDK=<Android SDK checkout> flutter run`. Gradle then takes
+   `com.wirexapp.baas:mobile-sdk` only from that folder, at the checkout's `VERSION`, in place of the
+   published artifact.
+6. In both native checkouts, run `node tools/inject-endpoints.mjs --empty` to put the empty table
+   back. Never commit an injected table.
+
+A local build rewrites `ios/Podfile.lock` and `pubspec.lock` with local paths. Put both back before
+you commit.
+

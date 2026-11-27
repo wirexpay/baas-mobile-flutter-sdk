@@ -9,6 +9,8 @@ cross the Dart bridge.
   a token in place of the card values.
 - **Wallet top-up** (`WirexWalletCheckoutView`) hosts the Wirex checkout with Apple Pay and Google
   Pay.
+- **Trade** (`WirexTrade`) buys and sells stocks and coins from the user's account. Your app
+  supplies the bearer and signs each step in the user's wallet; the key never crosses the bridge.
 
 Use of the SDK requires an agreement with Wirex. See [LICENSE](LICENSE).
 
@@ -45,6 +47,9 @@ are configured.
 The SDK never issues credentials. The host implements `WirexCredentialProvider`, which returns the
 user's access token, an action token for each scope the SDK asks for, and the user's email and wallet
 address. The SDK asks for a token when it needs one.
+
+`Trade` takes its own two: a `WirexTradeTokenProvider` for the bearer and a `WirexTradeSigner`. The
+signer answers the owner's address and signs each 32-byte hash per EIP-191 in the user's wallet.
 
 ## Documentation
 

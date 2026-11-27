@@ -1,3 +1,9 @@
+## Unreleased
+
+- Trade: `WirexTrade` buys and sells stocks and coins from the user's account, on Base or Arc. `account`, `setUpAccount`, `catalog`, `quote`, `execute`, `openOrders`, `resume` and `dispose`, with an `onStep` listener for each step and `WirexTradeError` for each failure.
+- Trade: the host signs. `WirexTradeSigner.signPersonal` gets a 32-byte hash and answers its 65-byte signature; the key never crosses the bridge. `WirexTradeTokenProvider` supplies the bearer.
+- Example: a Trade tab with the panels Account, Catalog, Quote, Trade and Open orders. It signs with a test user's key from the Config tab or a gitignored `e2e/e2e.local.json`, and refuses a production trade worth more than 10 USD.
+
 ## 0.3.15
 
 - 3-D Secure on iOS: the challenge now renders (the native view was left off-screen by the platform view's frame updates, so `state: challenge` showed an empty box).

@@ -48,3 +48,14 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+// SECURITY: e2e/e2e.local.json holds a test user's private key, and every build bundles the e2e/ assets.
+// So only a debug build runs while it exists; CI checkouts never have it (gitignored).
+val e2eLocalFile = file("../../e2e/e2e.local.json")
+tasks.matching { it.name == "preReleaseBuild" || it.name == "preProfileBuild" }.configureEach {
+    doFirst {
+        if (e2eLocalFile.exists()) {
+            throw GradleException("e2e/e2e.local.json exists: a release or profile build would carry its key. Move it away first.")
+        }
+    }
+}

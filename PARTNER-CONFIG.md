@@ -22,7 +22,8 @@ the provider block, or fetches an estimate with your bearer.
 | `cardId` | the card Reveal / Collect act on | partner (a provisioned card) |
 | `cardholderName` | display name on Collect | partner |
 | `walletAmount` / `walletCurrency` / `walletProvider` | the top-up quote the Wallet screens arm with | partner (from an estimate) |
-| `baasApiUrl` | the BaaS API base URL (https) for the Wallet screen's **Fetch estimate** helper; pricing is the partner backend's job, the helper only verifies a bearer | **Wirex**, per environment |
+| `baasApiUrl` | the BaaS API base URL (https), for the Trade tab's login and the Wallet screen's **Fetch estimate** helper. That helper only checks a bearer: pricing is the partner backend's job | **Wirex**, per environment |
+| `companyId` | `X-Company-Id` of the Trade tab's login, and part of the message it signs | **Wirex**, per integration |
 | `returnUrl` | Custom Tab App Link — **https, verified for this app's package** (`assetlinks.json`) | partner |
 
 ### Secrets (memory only — never persisted, never logged)
@@ -31,6 +32,7 @@ the provider block, or fetches an estimate with your bearer.
 | `bearer` | `getAccessToken` — Wirex bearer for the user | minted by the partner's auth |
 | `actionToken` | `getActionToken` — step-up for card data / PIN | the user's **wallet signature**, exchanged by the partner's backend |
 | `checkoutToken` | token mode — the short-lived top-up token | minted by the **partner's backend** |
+| `ownerKey` | the Trade tab's signer: a **test user's** exported private key. It signs the login and each UserOp hash. Never in a seed link | the user's own **wallet**, which signs; a real app never holds the key |
 
 ### Dev options
 | Toggle | What it does |
@@ -46,6 +48,27 @@ the provider block, or fetches an estimate with your bearer.
 | **3DS step-up** | environment; a top-up orchestrator URL (the 3DS screen takes it directly — the SDK makes no call and needs no credentials) |
 | **Wallet — Apple Pay / Google Pay** | environment, chainId, bearer, walletProvider, walletAmount/Currency; paste the estimation id + provider config on the Wallet screen |
 | **Wallet — token mode** | the above + a `checkoutToken` your backend minted |
+| **Trade** (stocks and coins) | environment, chainId, companyId, baasApiUrl, ownerKey. A pasted `bearer` wins over the key's login |
+
+## Where the values come from
+
+Each app fills the config from three sources. A higher source wins over a lower one.
+
+| Order | Source | Notes |
+|---|---|---|
+| 1, highest | `example/e2e/e2e.local.json` | Gitignored. Only a debug build reads it, and a release or profile build fails while it exists. Copy `e2e/e2e.example.json` to start |
+| 2 | The Config tab | `ownerKey` and the other secrets stay in memory only |
+| 3 | A `wirexqa://seed` link | Never carries `ownerKey`: a link that does is refused whole. It leaves alone the keys the file or the Config tab set |
+
+The other examples read the same fields from their own top source:
+
+| Platform | Top source |
+|---|---|
+| iOS | The launch environment, from the Xcode scheme or `SIMCTL_CHILD_*` |
+| Android | Intent extras, through `adb shell am start -e` |
+| React Native and Flutter | A gitignored `e2e.local.json`, read only in debug builds |
+
+The Trade tab gets its bearer from the key. It signs `I, owner of account <owner> confirm that I request access token for company <companyId> on chain <chainId> at <nonce>` and sends it to `POST /api/v1/user/authorize` at `baasApiUrl`, with `X-Company-Id` and `X-Chain-Id`. The nonce is the Unix time in seconds. On `production` the tab refuses a trade worth more than 10 USD.
 
 ## Credentials in a real integration
 
@@ -55,6 +78,7 @@ partner implements the credential provider instead:
 - `getAccessToken()` → a bearer from the partner's auth against Wirex BaaS.
 - `getActionToken(scope)` → the **user's wallet signature** over the confirmation action (`cardData`, `pin`).
 - `userEmail` / `userWallet` → the identity headers.
+- `WirexTradeSigner.signPersonal(hash)` → the **user's wallet** signs each 32-byte hash. The example's `ownerKey` stands in for that wallet and is for testing only.
 
 `WirexThreeDS.configure({ testMode })` takes **no** credentials: the host authenticates to obtain the
 orchestrator URL and hands it over.
