@@ -43,11 +43,14 @@ const _integration = <_FieldSpec>[
   _FieldSpec('wallet', 'User wallet', 'X-User-Wallet (EOA)'),
   _FieldSpec('cardId', 'Card ID', 'the card Reveal / Collect act on'),
   _FieldSpec('cardholderName', 'Cardholder name', null),
-  _FieldSpec('baasApiUrl', 'BaaS API URL', 'for the Wallet “Fetch estimate” helper'),
+  _FieldSpec('baasApiUrl', 'BaaS API URL', 'for the Wallet “Fetch estimate” helper and the Trade login'),
+  _FieldSpec('companyId', 'Company ID', 'X-Company-Id of the Trade login — Wirex assigns per integration'),
 ];
 const _secrets = <_FieldSpec>[
   _FieldSpec('bearer', 'Bearer token', 'getAccessToken — Wirex bearer for the user', secure: true),
   _FieldSpec('actionToken', 'Step-up action token', 'getActionToken — card data / PIN', secure: true),
+  _FieldSpec('ownerKey', 'Owner key (TEST USER ONLY)',
+      "the Trade tab's signer and login — a test user's exported key; never a seed link", secure: true),
 ];
 
 class ConfigScreen extends StatefulWidget {
@@ -121,13 +124,15 @@ class _ConfigScreenState extends State<ConfigScreen> {
     final int? applied = outcome.applied;
     DiagLog.instance.link(outcome.isApplied
         ? 'applied ${outcome.keys.length} values: ${outcome.keys.join(',')}'
+            '${outcome.skipped.isEmpty ? '' : ' skipped: ${outcome.skipped.join(',')}'}'
         : 'rejected: ${outcome.reason}');
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _seedOk = applied != null;
       _seedStatus = applied == null
           ? 'Not a wirexqa://seed link — ${outcome.reason}'
-          : 'Applied $applied value${applied == 1 ? '' : 's'}';
+          : 'Applied $applied value${applied == 1 ? '' : 's'}'
+              '${outcome.skipped.isEmpty ? '' : ' · kept ${outcome.skipped.join(', ')} (set on this tab or in the file)'}';
       if (applied != null) _seed.clear();
     });
   }
@@ -217,6 +222,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
                 _chip('production', environment == 'production'),
               ],
             ),
+            if (LiveConfig.instance.fromFile('environment')) _fileNote(),
             _section('Integration parameters'),
             _group(_integration),
             _section('Secrets · memory only'),
@@ -326,6 +332,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
   Widget _chip(String name, bool on) => GestureDetector(
         onTap: () {
           DiagLog.instance.tap("Config: environment chip '$name' tapped");
+          if (LiveConfig.instance.fromFile('environment')) return;
           LiveConfig.instance.setCredential('environment', name);
           setState(() {});
         },
@@ -350,6 +357,12 @@ class _ConfigScreenState extends State<ConfigScreen> {
         ],
       ]);
 
+  Widget _fileNote() => const Padding(
+        padding: EdgeInsets.only(top: 4),
+        child: Text('from ${LiveConfig.e2eFileName} — the file wins; edit it and restart',
+            style: TextStyle(fontSize: 12, color: _P.teal)),
+      );
+
   Widget _field(_FieldSpec spec) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -365,6 +378,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
             controller: _controllers[spec.key],
             focusNode: _focus[spec.key],
             obscureText: spec.secure,
+            readOnly: LiveConfig.instance.fromFile(spec.key),
             autocorrect: false,
             enableSuggestions: false,
             style: const TextStyle(fontSize: 15, color: _P.text),
@@ -372,6 +386,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
             onChanged: (value) => LiveConfig.instance.setCredential(spec.key, value, notify: false),
             decoration: _decoration(spec.secure ? 'paste…' : ''),
           ),
+          if (LiveConfig.instance.fromFile(spec.key)) _fileNote(),
         ],
       );
 

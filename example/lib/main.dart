@@ -11,12 +11,14 @@ import 'checkout_screen.dart';
 import 'collect_screen.dart';
 import 'config_screen.dart';
 import 'diag_log.dart';
+import 'e2e_file.dart';
 import 'example_config.dart';
 import 'live_config.dart';
 import 'memory_cache.dart';
 import 'threeds_screen.dart';
+import 'trade_screen.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Draw behind the system bars and let the framework report their insets, so the bottom
   // NavigationBar sits above the gesture pill / 3-button navigation bar rather than under it.
@@ -36,11 +38,13 @@ void main() {
     FlutterError.presentError(details);
     DiagLog.instance.err('flutter: ${details.exceptionAsString()}');
   };
+  // The top config source, before any screen reads the config. Debug builds only.
+  await loadE2eFile();
   runApp(const ExampleApp());
 }
 
 /// The SDK version this example was built against (pubspec.lock). Shown in the diagnostic log's header.
-const String sdkVersion = '0.3.15';
+const String sdkVersion = '0.3.16';
 
 /// What a partner application has to implement.
 ///
@@ -113,7 +117,7 @@ class _Tabs extends StatefulWidget {
 }
 
 class _TabsState extends State<_Tabs> {
-  static const List<String> _tabNames = <String>['Config', 'Reveal', 'Collect', '3DS', 'Wallet', 'Appearance'];
+  static const List<String> _tabNames = <String>['Config', 'Reveal', 'Collect', '3DS', 'Wallet', 'Trade', 'Appearance'];
   int _index = 0;
   bool _collectConfigured = false;
 
@@ -133,7 +137,7 @@ class _TabsState extends State<_Tabs> {
     // bearer take effect. Reveal and 3DS observe the same revision for themselves.
     LiveConfig.instance.credentialsRevision.addListener(_onCredentialsChanged);
     // A `wirexqa://seed?d=<base64url(JSON)>` deep link prefills the Config, so a partner or QA can arm
-    // a device without typing — ANY parameter, the bearer and action token included. The payload is one
+    // a device without typing — any parameter but `ownerKey`, the bearer included. The payload is one
     // base64 param (no `&`/`+` to mangle). A real integration mints these from its own auth and the
     // user's wallet; nothing is compiled into the binary (there are no secret `--dart-define`s). The
     // Config tab has a field for the same link, for a device where opening it is awkward.
@@ -168,6 +172,7 @@ class _TabsState extends State<_Tabs> {
     final SeedLinkOutcome outcome = LiveConfig.instance.applySeedLinkDetailed(uri);
     DiagLog.instance.link(outcome.isApplied
         ? 'applied ${outcome.keys.length} values: ${outcome.keys.join(',')}'
+            '${outcome.skipped.isEmpty ? '' : ' skipped: ${outcome.skipped.join(',')}'}'
         : 'rejected: ${outcome.reason}');
   }
 
@@ -259,6 +264,7 @@ class _TabsState extends State<_Tabs> {
         2 => 'Collect — Flutter',
         3 => '3DS — Flutter',
         4 => 'Wallet — Flutter',
+        5 => 'Trade — Flutter',
         _ => 'Appearance — Flutter',
       }),
     ),
@@ -276,6 +282,7 @@ class _TabsState extends State<_Tabs> {
         _index == 2 ? CollectScreen(configured: _collectConfigured) : const SizedBox.shrink(),
         _index == 3 ? ThreeDSScreen() : const SizedBox.shrink(),
         _walletTab(),
+        const TradeScreen(),
         AppearanceScreen(),
       ],
     ),
@@ -291,6 +298,7 @@ class _TabsState extends State<_Tabs> {
         NavigationDestination(icon: Icon(Icons.keyboard), label: 'Collect'),
         NavigationDestination(icon: Icon(Icons.verified_user), label: '3DS'),
         NavigationDestination(icon: Icon(Icons.account_balance_wallet), label: 'Wallet'),
+        NavigationDestination(icon: Icon(Icons.candlestick_chart), label: 'Trade'),
         NavigationDestination(icon: Icon(Icons.palette), label: 'Appearance'),
       ],
     ),

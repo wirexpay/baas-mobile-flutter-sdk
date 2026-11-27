@@ -19,6 +19,7 @@ Your app supplies two things:
 | Collect | yes | Captures an external card in a sealed native form and tokenizes it at the acquirer. |
 | 3-D Secure | **no** | Renders the issuer challenge for a card payment and reports the outcome. |
 | Wallet | yes | Embeds the Wirex-hosted Apple Pay / Google Pay checkout for a backend-priced top-up. |
+| Trade | yes, and a signer | Buys and sells stocks and coins from the user's account. Your app signs each step in the user's wallet. |
 
 :::diagram model Apple/Google Pay
 
@@ -331,7 +332,84 @@ class _CheckoutState extends State<Checkout> {
 
 > **Gotcha · availability** Start a `WirexWalletAvailabilityChecker` with the real provider block before you show a Pay button; `onChange` reports the native answer. On the iOS Simulator it reports unavailable, and the Pay sheet cannot present. Test on a device with a provisioned card.
 
-## 8. Appearance, strings and sizing
+## 8. Trade {creds}
+
+`WirexTrade` runs a stock or coin trade for the signed-in user. It reads the accounts, sets up the investment account, quotes and runs each order until it ends. The native engine runs every step and checks every call before anything is signed. Your app supplies the bearer and signs each UserOp hash in the user's wallet. `Trade` ships in the release after 0.3.15; see `CHANGELOG.md`.
+
+```dart
+import 'package:wirex_mobile_sdk/wirex_mobile_sdk.dart';
+
+class AppTradeTokens implements WirexTradeTokenProvider {
+  @override
+  Future<String> accessToken() async => '<bearer for the signed-in user, from your backend>';
+}
+
+class AppTradeSigner implements WirexTradeSigner {
+  @override
+  String get address => '<the owner address, 0x hex>';
+
+  /// EIP-191 over the raw 32 bytes of [hash], signed in the user's wallet: 0x hex in, 65 bytes 0x hex out.
+  @override
+  Future<String> signPersonal(String hash) async => '<r ‖ s ‖ v from the user wallet>';
+}
+
+Future<WirexTradeOrder> buyStock(String symbol, String usd) async {
+  final WirexTrade trade =
+      await WirexTrade.create(chainId: '<chain id>', tokenProvider: AppTradeTokens(), signer: AppTradeSigner());
+  try {
+    final WirexTradeAccount account = await trade.account();
+    if (!account.isSetUp) await trade.setUpAccount(onStep: _show);
+    final WirexTradeQuote quote = await trade.quote(
+      market: WirexTradeMarket.stock,
+      side: WirexTradeSide.buy,
+      symbol: symbol,
+      amount: usd,                                                  // the typed text, such as '5.25': USD on a buy
+    );
+    return await trade.execute(quote, onStep: _show);               // Completed, Returned, Failed or Expired
+  } finally {
+    await trade.dispose();
+  }
+}
+
+Future<void> carryOn(WirexTrade trade, WirexTradeQuote? heldQuote) async {
+  for (final WirexTradeOpenOrder order in await trade.openOrders()) {
+    await trade.resume(order.orderId, quote: heldQuote?.orderId == order.orderId ? heldQuote : null, onStep: _show);
+  }
+}
+
+void _show(WirexTradeStepEvent event) {}                            // step, state, orderId, status, reason
+```
+
+| Member | What it does |
+|---|---|
+| `account()` | Reads the main account, the investment account, whether it is set up, its USDC and its holdings. Sends nothing |
+| `setUpAccount({onStep})` | Sets up the investment account once, then answers `account()` |
+| `catalog()` | Lists the stocks and coins the company can trade, with each token's decimals |
+| `quote({market, side, symbol, amount})` | Quotes a buy or a sale. `amount` is the decimal text the user types, such as `5.25`: USD on a buy, the token on a sale. The engine converts it |
+| `execute(quote, {onStep})` | Runs the quote until its order ends, and answers the ended `WirexTradeOrder` |
+| `openOrders()` | Lists the orders that have not ended, each with the `nextStep` that `resume` would run |
+| `resume(orderId, {quote, onStep})` | Carries an open order on from where the backend and the chain say it stands |
+| `dispose()` | Stops this trade's calls. A later call throws a `StateError`. What was sent stays sent, and `openOrders` and `resume` pick it up |
+
+- **Create.** `WirexTrade.create` takes `testMode` (default `false`, production), `chainId`, `tokenProvider`, `signer` and optional `timeouts`. The main account trades from Base, 8453, or Arc, 5042. The investment account is always on Base.
+- **The key never crosses.** Only the 32-byte hash comes into Dart and only the 65-byte signature goes back. A throw from `signPersonal` fails the step with `signer_failed`, and nothing is sent. A throw or an empty token from `accessToken()` fails the call with `token_unavailable`.
+- **The ended order.** `execute` and `resume` answer an order with `status` `Completed`, `Returned`, `Failed` or `Expired`. A `Failed` order carries its `statusReason`. They throw only when they cannot carry on, and the order then stays open for `resume`.
+- **Resume after a restart.** Keep nothing yourself. `openOrders()` reads what is open, and `resume` rebuilds the rest from the backend and the chain. Pass the quote when you still hold it. A store or an Arc sale's swap that never went needs it, and fails with `quote_required` without it.
+- **Steps.** `onStep` gets one `WirexTradeStepEvent` per change: `step`, `state` (`started`, `done`, `failed`), `orderId`, `status`, `reason`, and on a send the `userOpHash` and `transactionHash`.
+
+Errors are `WirexTradeError`. Its `reason` is one name from the contract's list, with `step`, `orderId`, `routeReason`, `detailKey`, `httpStatus` and `entryPointCode` when they apply. It never carries an amount, an address, a hash or the backend's text.
+
+| Reason | What to do |
+|---|---|
+| `investment_wallet_required` | Call `setUpAccount`, then quote again |
+| `quote_expired` | Get a new quote |
+| `signer_mismatch` | The signer's address does not own the main account. Nothing was signed |
+| `insufficient_funds` | The main account cannot cover the buy. Nothing was signed |
+| `order_not_ended` | The order is still open. Resume it from `openOrders()` |
+| `quote_required` | Pass the order's quote to `resume` |
+| `token_unavailable`, `signer_failed` | Your provider or signer threw. Nothing was sent |
+
+## 9. Appearance, strings and sizing
 
 Every surface takes an appearance object and a strings object. The SDK ships no copy, so your app supplies every word the views draw.
 
@@ -370,7 +448,7 @@ const WirexWalletBranding walletBranding = WirexWalletBranding(logo: WirexWallet
 - Wallet: `appearance` passes CSS variables to the frame; `buttons` sets the Apple Pay `style`/`type` and Google Pay `color`/`type`; `branding` sets the logo (`WirexWalletLogo.wirex()`, `hidden()`, `custom(dataUri)`), the processing disclosure and a privacy URL; `strings` is a `Map<SpecWalletStringKey, String>` overriding the 11 labels of the checkout.
 - **Sizing.** Reveal rows and the collect form size themselves from the native content; the wallet emits a `WirexWalletCheckoutNaturalHeight` event and exposes `controller.naturalHeight`. Apply those heights instead of hardcoding them.
 
-## 9. Logging, timeouts and errors
+## 10. Logging, timeouts and errors
 
 ```dart
 import 'package:wirex_mobile_sdk/wirex_mobile_sdk.dart';
@@ -405,7 +483,7 @@ Future<WirexWalletEnvironment?> safeResolve(String name) async {
 - `WirexDeclined` is the one shared sentinel: the user said no, and nothing was sent.
 - An unknown wallet environment name throws `WirexWalletEnvironmentUnavailable`; an empty `chainId` on the card surfaces fails `configure` with an `invalid_environment` platform error. Show the reason; never fall back to another environment.
 
-## 10. Your backend
+## 11. Your backend
 
 The SDK makes none of these calls. Your backend performs them with the partner credentials Wirex issued, and the app passes the results in:
 
@@ -416,11 +494,11 @@ The SDK makes none of these calls. Your backend performs them with the partner c
 
 Authenticated calls carry `Authorization: Bearer`, `X-Chain-Id` and one identity header (`X-User-Email` or `X-User-Wallet`, never both). For exact paths and payloads see the Wirex BaaS API reference provided with your integration.
 
-## 11. The example app
+## 12. The example app
 
-[`example/`](example/) is a Flutter app that exercises all four surfaces against your own data; nothing is compiled in. Run `flutter pub get` and `flutter run`; it resolves the SDK from pub.dev. The **Config** tab is a per-field editor for the environment, the integration parameters (chain id, identity, card id, cardholder name) and the secrets (bearer, step-up action token); values live in memory only, and every screen reads them live. The **Wallet** screen takes an estimation id and the provider block, and its **Fetch estimate** button prices a top-up through the BaaS API with your bearer, so you can get a real estimation id without standing up a backend. The **Appearance** tab restyles every sealed surface at once. The field list is in [`PARTNER-CONFIG.md`](PARTNER-CONFIG.md). Reveal values render blank on the iOS Simulator and the Pay sheet needs a real device.
+[`example/`](example/) is a Flutter app that exercises all four surfaces against your own data; nothing is compiled in. Run `flutter pub get` and `flutter run`; it resolves the SDK from pub.dev. The **Config** tab is a per-field editor for the environment, the integration parameters (chain id, identity, card id, cardholder name) and the secrets (bearer, step-up action token); values live in memory only, and every screen reads them live. The **Wallet** screen takes an estimation id and the provider block, and its **Fetch estimate** button prices a top-up through the BaaS API with your bearer, so you can get a real estimation id without standing up a backend. The **Trade** tab runs a stock or coin trade signed by a test user's key; [`example/README.md`](example/README.md) says how to run it. The **Appearance** tab restyles every sealed surface at once. The field list is in [`PARTNER-CONFIG.md`](PARTNER-CONFIG.md). Reveal values render blank on the iOS Simulator and the Pay sheet needs a real device.
 
-## 12. Patterns from a production integration
+## 13. Patterns from a production integration
 
 The SDK ships inside a production cardholder app built on the same BaaS API. The patterns below are not required by the API; they are what that integration settled on, with the app-specific parts removed.
 
@@ -608,7 +686,7 @@ TabOutcome readReturn(String? url, String returnUrl, WirexWalletQuote quote) {
 - **A failed mint is not fatal in-app.** Run legacy mode instead: the frame tokenizes and your backend executes. Keep `debug` off outside development builds.
 - **Custom Tab is the partner path for Google Pay on Android** when your own WebView cannot complete it. Use an **https App Link** as `returnUrl` (a custom scheme can be claimed by any installed app), open the URL in a Custom Tab, and treat every ending that is not `completed`, `pending` or `failed` as unknown: Android cannot close the tab for you, and a closed tab says nothing about the payment. A Custom Tab needs token mode; there is nobody to hand a wallet token to.
 
-## 13. Troubleshooting
+## 14. Troubleshooting
 
 - **A revealed field is blank.** iOS Simulator (secure layer), or the row was given a box shorter than its content.
 - **`configure` fails with `invalid_environment`.** This build has no endpoints for that side, or `chainId` is empty.
@@ -617,3 +695,5 @@ TabOutcome readReturn(String? url, String returnUrl, WirexWalletQuote quote) {
 - **The Pay button is unavailable.** The checker was not started, the provider block is empty, or you are on the iOS Simulator.
 - **3-D Secure ends in `pending`.** Not an error. Settle by your backend's status.
 - **Both `userEmail` and `userWallet` are set.** The backend answers `400`. Return exactly one.
+- **A trade fails with `token_unavailable`.** Your `WirexTradeTokenProvider` threw or answered an empty token.
+- **A trade fails with `signer_mismatch`.** The signer's address is not the owner of the user's main account.

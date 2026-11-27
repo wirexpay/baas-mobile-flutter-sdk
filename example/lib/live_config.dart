@@ -37,11 +37,16 @@ class ConfigRejected extends ConfigOutcome {
 /// What [LiveConfig.applySeedLinkDetailed] did: the KEY NAMES it set, or why it set nothing. Safe to
 /// show and to log — no value travels in it.
 class SeedLinkOutcome {
-  const SeedLinkOutcome.applied(this.keys) : reason = null;
-  const SeedLinkOutcome.rejected(String this.reason) : keys = const <String>[];
+  const SeedLinkOutcome.applied(this.keys, {this.skipped = const <String>[]}) : reason = null;
+  const SeedLinkOutcome.rejected(String this.reason)
+      : keys = const <String>[],
+        skipped = const <String>[];
 
   /// Names of the keys set, in payload order. Empty when rejected.
   final List<String> keys;
+
+  /// Keys left alone because `e2e.local.json` or the Config tab set them, which win over a link.
+  final List<String> skipped;
 
   /// Why nothing was applied; null when [keys] were.
   final String? reason;
@@ -73,7 +78,12 @@ class LiveConfig extends ChangeNotifier {
     // Per-surface inputs a seed link may carry, so a QA device needs no typing at all: the 3DS tab's
     // orchestrator URL and the Checkout tab's checkout token / estimation id / provider.
     'threeDsUrl', 'checkoutToken', 'estimationId', 'walletProvider',
+    // The Trade tab. `ownerKey` is a test user's private key: memory only, never in a seed link.
+    'companyId', 'ownerKey',
   ];
+
+  /// The local file's name, as the Config tab shows a value's source.
+  static const String e2eFileName = 'e2e.local.json';
 
   /// Whether to pass `dangerouslyDisableScreenProtection: true` to the SDK. Default false (protection
   /// ON — the secure default); set `disableScreenProtection=true` to let QA screenshot the surfaces.
@@ -104,16 +114,55 @@ class LiveConfig extends ChangeNotifier {
   final Map<String, Object?> _lightTokens = <String, Object?>{};
   final Map<String, Object?> _darkTokens = <String, Object?>{};
 
-  String credential(String key) => _credentials[key] ?? '';
+  /// The highest source first: `e2e.local.json` (debug builds only), the Config tab, a seed link.
+  final Map<String, String> _fileValues = <String, String>{};
+
+  /// Keys the Config tab set this run; a later seed link leaves them alone.
+  final Set<String> _tabKeys = <String>{};
+
+  String credential(String key) => _fileValues[key] ?? _credentials[key] ?? '';
+
+  /// True when `e2e.local.json` set [key]; the Config tab then shows it read-only.
+  bool fromFile(String key) => _fileValues.containsKey(key);
+
+  /// Loads `e2e.local.json`, the top source. Reports key names only, never a value.
+  ConfigOutcome applyFileText(String text) {
+    final Map<String, Object?>? parsed = _parse(text);
+    if (parsed == null) return const ConfigRejected('$e2eFileName is not a JSON object');
+    final List<String> applied = <String>[];
+    final List<String> ignored = <String>[];
+    parsed.forEach((String key, Object? value) {
+      final String? text = value is String ? value : (value is num ? '$value' : null);
+      if (!_known.contains(key) || text == null) {
+        ignored.add(key);
+        return;
+      }
+      if (text.isEmpty) return;
+      _fileValues[key] = text;
+      applied.add(key);
+    });
+    credentialsRevision.value++;
+    var summary = '$e2eFileName: ${(applied..sort()).join(', ')}';
+    if (ignored.isNotEmpty) summary += ' · IGNORED: ${(ignored..sort()).join(', ')}';
+    DiagLog.instance.config(summary);
+    return ConfigMerged(summary);
+  }
+
+  /// Drops the file's values. For tests: a build reads the file once, at launch.
+  void clearFileValues() {
+    _fileValues.clear();
+    credentialsRevision.value++;
+  }
 
   /// Writes a single key — the per-field Config tab's edit. An EMPTY value CLEARS the key, matching
   /// [applyCredentials]. `notify` is false while a field is mid-edit (every keystroke) and true when
   /// it loses focus, so a screen rebuilds once on blur rather than on every character.
   void setCredential(String key, String value, {bool notify = true}) {
+    _write(key, value);
     if (value.isEmpty) {
-      _credentials.remove(key);
+      _tabKeys.remove(key);
     } else {
-      _credentials[key] = value;
+      _tabKeys.add(key);
     }
     if (!notify) return;
     // Logged on commit only (blur / switch / chip), never per keystroke — and never the value.
@@ -141,7 +190,7 @@ class LiveConfig extends ChangeNotifier {
   /// Applies a `wirexqa://seed?d=<base64url(JSON)>` link — the deep link the example registers — from
   /// the launch URI or from text pasted into the Config tab. Returns how many values were set, or null
   /// when [uri] is not a seed link (other scheme or host, no `d`, undecodable); [applySeedLinkDetailed]
-  /// says which. Any key is applied, the bearer and action token included; the payload is one base64
+  /// says which. Any key but `ownerKey` is applied, the bearer included; the payload is one base64
   /// param (no `&`/`+` to mangle). A real integration mints these from its own auth and the user's
   /// wallet; this only saves typing on a test device — every value stays in memory only.
   int? applySeedLink(Uri? uri) => applySeedLinkDetailed(uri).applied;
@@ -175,15 +224,24 @@ class LiveConfig extends ChangeNotifier {
       return SeedLinkOutcome.rejected(
           'JSON parse failed: the link looks cut short (${uri.toString().length} chars, ${decoded.length} decoded) — copy the whole link again');
     }
+    // SECURITY: links travel in chats and QR codes, and a key never expires as a bearer does.
+    if (json.containsKey('ownerKey')) {
+      return const SeedLinkOutcome.rejected('a seed link never carries ownerKey: set it on the Config tab or in e2e.local.json');
+    }
     final List<String> keys = <String>[];
+    final List<String> skipped = <String>[];
     json.forEach((String rawKey, dynamic value) {
       if (value == null || '$value'.isEmpty) return;
       final String key = _seedAliases[rawKey] ?? rawKey;
-      setCredential(key, '$value', notify: false);
+      if (_fileValues.containsKey(key) || _tabKeys.contains(key)) {
+        skipped.add(key);
+        return;
+      }
+      _write(key, '$value');
       keys.add(key);
     });
     credentialsRevision.value++;
-    return SeedLinkOutcome.applied(keys);
+    return SeedLinkOutcome.applied(keys, skipped: skipped);
   }
 
   /// [applySeedLink] for text pasted into the Config tab.
@@ -195,6 +253,7 @@ class LiveConfig extends ChangeNotifier {
   /// Clears every credential / identity value back to empty (environment falls back to `test`).
   void resetCredentials() {
     _credentials.clear();
+    _tabKeys.clear();
     DiagLog.instance.config('reset all');
     credentialsRevision.value++;
   }
@@ -216,10 +275,12 @@ class LiveConfig extends ChangeNotifier {
       // omitting it.
       if (value.isEmpty) {
         _credentials.remove(key);
+        _tabKeys.remove(key);
         cleared.add(key);
         return;
       }
       _credentials[key] = value;
+      _tabKeys.add(key);
       applied.add(key);
     });
 
@@ -237,14 +298,17 @@ class LiveConfig extends ChangeNotifier {
   /// Per-key presence, and for JWTs whether they are still valid. The expiry check is the point: an
   /// expired `action_token` and a missing one fail identically at the API, and knowing which is the
   /// difference between pasting a new token and hunting a bug.
-  String credentialsStatus() => <String>['bearer', 'actionToken', 'cardId', 'cardholderName', 'email', 'wallet']
+  String credentialsStatus() => <String>[
+        'bearer', 'actionToken', 'cardId', 'cardholderName', 'email', 'wallet', 'companyId', 'ownerKey',
+      ]
       .map((key) {
         final value = credential(key);
         if (value.isEmpty) return '$key: —';
+        final source = fromFile(key) ? ' ($e2eFileName)' : '';
         final expiry = _jwtExpirySeconds(value);
-        if (expiry == null) return '$key: set';
+        if (expiry == null) return '$key: set$source';
         final remaining = expiry - DateTime.now().millisecondsSinceEpoch ~/ 1000;
-        return remaining > 0 ? '$key: valid ${remaining}s' : '$key: EXPIRED ${-remaining}s ago';
+        return remaining > 0 ? '$key: valid ${remaining}s$source' : '$key: EXPIRED ${-remaining}s ago$source';
       })
       .join('\n');
 
@@ -362,6 +426,14 @@ class LiveConfig extends ChangeNotifier {
       iconSize: number('iconSize'),
       controlMinHeight: number('controlMinHeight'),
     );
+  }
+
+  void _write(String key, String value) {
+    if (value.isEmpty) {
+      _credentials.remove(key);
+    } else {
+      _credentials[key] = value;
+    }
   }
 
   Map<String, Object?>? _parse(String json) {

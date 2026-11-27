@@ -33,6 +33,11 @@ target 'Runner' do
 
   # The native WirexMobileSDK pod is a dependency of the Wirex Flutter plugins' podspecs and is
   # resolved automatically from the CocoaPods trunk — nothing to declare here.
+  # DEV ONLY: `WIREX_IOS_SDK=<baas-ios-sdk checkout>` builds the native SDK from its sources instead.
+  if ENV['WIREX_IOS_SDK']
+    ENV['WIREX_SDK_FROM_SOURCE'] = '1'
+    pod 'WirexMobileSDK', :path => File.expand_path(ENV['WIREX_IOS_SDK'])
+  end
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
   target 'RunnerTests' do
     inherit! :search_paths
