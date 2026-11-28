@@ -38,6 +38,7 @@ The Wallet surface takes the same environment name from the Config tab.
 | **3DS** | paste a top-up orchestrator URL → the issuer challenge, and the outcome |
 | **Wallet** | the hosted Apple Pay / Google Pay checkout (paste a provider block, build a quote — legacy tokenise flow) |
 | **Trade** | a stock or coin trade: Account, Catalog, Quote, Trade and Open orders, signed by a test user's key |
+| **Crypto** | a send to an address on any network, and the account's deposit addresses: Balances, Send, Pending and Deposit |
 | **Appearance** | restyle every sealed surface at once — presets or a pasted token document |
 
 The field contract is the same across the React Native / iOS / Android examples — see
@@ -46,10 +47,15 @@ The field contract is the same across the React Native / iOS / Android examples 
 > A revealed value is a native view; on the iOS Simulator the capture-proof layer renders blank (PCI
 > protection, not a bug). The Apple/Google Pay sheet needs a real device; the checkout still arms.
 
-## Run a trade from a local build
+## Run a trade or a send from a local build
 
-The Trade tab signs with a test user's exported private key. Use a test user only, and keep amounts
-small: on `production` the tab refuses a trade worth more than 10 USD.
+The Trade and Crypto tabs sign with a test user's exported private key. Use a test user only, and keep
+amounts small: on `production` each tab refuses a trade or a send worth more than 10 USD.
+
+The Crypto tab counts a send at its amount, then at what leaves with the fee, at `Send` and `Resume`.
+USDC, USDT and WUSD count at face value, EURC and WEUR at 1.25 USD, and any other token is refused.
+It holds its quotes in memory only. After a restart, `Load pending` still lists an open send. A row
+with no held quote shows "no quote held for this send" and cannot resume.
 
 ### Prefill the config from a file
 
@@ -66,7 +72,7 @@ The app gets its bearer from the key. It signs the login message and calls
 
 ### Build against local SDK sources
 
-Until the SDK release with `Trade` is out, the tab builds only against local checkouts of the plugin
+Until the SDK release with `Trade` and `Crypto` is out, the tabs build only against local checkouts of the plugin
 and the native SDKs. Without these steps the example builds against the published package.
 
 1. Point pub at the plugin checkout. Create `example/pubspec_overrides.yaml`, which git ignores:

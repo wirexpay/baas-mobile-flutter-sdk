@@ -10,6 +10,7 @@ import 'appearance_screen.dart';
 import 'checkout_screen.dart';
 import 'collect_screen.dart';
 import 'config_screen.dart';
+import 'crypto_screen.dart';
 import 'diag_log.dart';
 import 'e2e_file.dart';
 import 'example_config.dart';
@@ -117,7 +118,7 @@ class _Tabs extends StatefulWidget {
 }
 
 class _TabsState extends State<_Tabs> {
-  static const List<String> _tabNames = <String>['Config', 'Reveal', 'Collect', '3DS', 'Wallet', 'Trade', 'Appearance'];
+  static const List<String> _tabNames = <String>['Config', 'Reveal', 'Collect', '3DS', 'Wallet', 'Trade', 'Crypto', 'Appearance'];
   int _index = 0;
   bool _collectConfigured = false;
 
@@ -265,6 +266,7 @@ class _TabsState extends State<_Tabs> {
         3 => '3DS — Flutter',
         4 => 'Wallet — Flutter',
         5 => 'Trade — Flutter',
+        6 => 'Crypto — Flutter',
         _ => 'Appearance — Flutter',
       }),
     ),
@@ -283,6 +285,7 @@ class _TabsState extends State<_Tabs> {
         _index == 3 ? ThreeDSScreen() : const SizedBox.shrink(),
         _walletTab(),
         const TradeScreen(),
+        const CryptoScreen(),
         AppearanceScreen(),
       ],
     ),
@@ -299,6 +302,7 @@ class _TabsState extends State<_Tabs> {
         NavigationDestination(icon: Icon(Icons.verified_user), label: '3DS'),
         NavigationDestination(icon: Icon(Icons.account_balance_wallet), label: 'Wallet'),
         NavigationDestination(icon: Icon(Icons.candlestick_chart), label: 'Trade'),
+        NavigationDestination(icon: Icon(Icons.currency_exchange), label: 'Crypto'),
         NavigationDestination(icon: Icon(Icons.palette), label: 'Appearance'),
       ],
     ),
