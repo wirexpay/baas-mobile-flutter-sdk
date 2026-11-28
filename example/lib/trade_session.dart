@@ -48,7 +48,7 @@ Future<WirexTrade> _createTrade({
 
 class TradeSession {
   TradeSession({KeyLogin? login, TradeFactory? create})
-      : login = login ?? KeyLogin(),
+      : login = login ?? exampleLogin,
         _create = create ?? _createTrade;
 
   final KeyLogin login;

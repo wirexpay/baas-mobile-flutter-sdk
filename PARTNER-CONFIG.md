@@ -23,7 +23,7 @@ the provider block, or fetches an estimate with your bearer.
 | `cardholderName` | display name on Collect | partner |
 | `walletAmount` / `walletCurrency` / `walletProvider` | the top-up quote the Wallet screens arm with | partner (from an estimate) |
 | `baasApiUrl` | the BaaS API base URL (https), for the Trade tab's login and the Wallet screen's **Fetch estimate** helper. That helper only checks a bearer: pricing is the partner backend's job | **Wirex**, per environment |
-| `companyId` | `X-Company-Id` of the Trade tab's login, and part of the message it signs | **Wirex**, per integration |
+| `companyId` | `X-Company-Id` of the Trade and Crypto tabs' login, and part of the message it signs | **Wirex**, per integration |
 | `returnUrl` | Custom Tab App Link — **https, verified for this app's package** (`assetlinks.json`) | partner |
 
 ### Secrets (memory only — never persisted, never logged)
@@ -32,7 +32,7 @@ the provider block, or fetches an estimate with your bearer.
 | `bearer` | `getAccessToken` — Wirex bearer for the user | minted by the partner's auth |
 | `actionToken` | `getActionToken` — step-up for card data / PIN | the user's **wallet signature**, exchanged by the partner's backend |
 | `checkoutToken` | token mode — the short-lived top-up token | minted by the **partner's backend** |
-| `ownerKey` | the Trade tab's signer: a **test user's** exported private key. It signs the login and each UserOp hash. Never in a seed link | the user's own **wallet**, which signs; a real app never holds the key |
+| `ownerKey` | the Trade and Crypto tabs' signer: a **test user's** exported private key. It signs the login and each UserOp hash. Never in a seed link | the user's own **wallet**, which signs; a real app never holds the key |
 
 ### Dev options
 | Toggle | What it does |
@@ -49,6 +49,7 @@ the provider block, or fetches an estimate with your bearer.
 | **Wallet — Apple Pay / Google Pay** | environment, chainId, bearer, walletProvider, walletAmount/Currency; paste the estimation id + provider config on the Wallet screen |
 | **Wallet — token mode** | the above + a `checkoutToken` your backend minted |
 | **Trade** (stocks and coins) | environment, chainId, companyId, baasApiUrl, ownerKey. A pasted `bearer` wins over the key's login |
+| **Crypto** (sends and deposit addresses) | the same fields as Trade. One login serves both tabs |
 
 ## Where the values come from
 
@@ -68,7 +69,9 @@ The other examples read the same fields from their own top source:
 | Android | Intent extras, through `adb shell am start -e` |
 | React Native and Flutter | A gitignored `e2e.local.json`, read only in debug builds |
 
-The Trade tab gets its bearer from the key. It signs `I, owner of account <owner> confirm that I request access token for company <companyId> on chain <chainId> at <nonce>` and sends it to `POST /api/v1/user/authorize` at `baasApiUrl`, with `X-Company-Id` and `X-Chain-Id`. The nonce is the Unix time in seconds. On `production` the tab refuses a trade worth more than 10 USD.
+The Trade and Crypto tabs get their bearer from the key. It signs `I, owner of account <owner> confirm that I request access token for company <companyId> on chain <chainId> at <nonce>` and sends it to `POST /api/v1/user/authorize` at `baasApiUrl`, with `X-Company-Id` and `X-Chain-Id`. The nonce is the Unix time in seconds.
+
+On `production` the Trade tab refuses a trade worth more than 10 USD. The Crypto tab refuses a send whose amount, or what leaves with the fee, is worth more than 10 USD. It counts USDC, USDT and WUSD at face value, EURC and WEUR at 1.25 USD, and refuses any other token.
 
 ## Credentials in a real integration
 

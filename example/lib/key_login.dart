@@ -24,7 +24,10 @@ class KeyLoginException implements Exception {
 String loginMessage({required String owner, required String companyId, required String chainId, required int nonce}) =>
     'I, owner of account $owner confirm that I request access token for company $companyId on chain $chainId at $nonce';
 
-/// Answers the bearer the Trade tab sends, from [LiveConfig].
+/// The one login the Trade and Crypto tabs share, so the key signs in once for both.
+final KeyLogin exampleLogin = KeyLogin();
+
+/// Answers the bearer the Trade and Crypto tabs send, from [LiveConfig].
 class KeyLogin implements WirexTradeTokenProvider {
   KeyLogin({http.Client? client, DateTime Function()? clock})
       : _client = client ?? http.Client(),

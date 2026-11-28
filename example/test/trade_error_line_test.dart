@@ -52,4 +52,13 @@ void main() {
     expect(tradeErrorLine(StateError('WirexTrade: disposed')), contains('tap again'));
     expect(tradeErrorLine(Exception('0xsecret')), isNot(contains('0xsecret')));
   });
+
+  test('a crypto failure takes the Crypto hints, word for word', () {
+    expect(cryptoReasonHints, hasLength(12));
+    expect(tradeErrorLine(const WirexCryptoError('insufficient_funds', step: WirexCryptoStep.request)),
+        'insufficient_funds · (the main account cannot cover the send) · step request');
+    expect(tradeErrorLine(const WirexCryptoError('quote_mismatch')), "quote_mismatch · (the quote is not this send's)");
+    expect(tradeErrorLine(const WirexCryptoError('bridge_refused', httpStatus: 422)), 'bridge_refused · HTTP 422');
+    expect(tradeErrorLine(const WirexCryptoError('token_unavailable')), 'token_unavailable · (sign in again)');
+  });
 }

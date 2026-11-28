@@ -1,4 +1,4 @@
-/// One line for a failed Trade call, the same on every example:
+/// One line for a failed Trade or Crypto call, the same on every example:
 /// `reason · (hint) · step <step> · route <routeReason> / <detailKey> · HTTP <status> · <entryPointCode>`.
 library;
 
@@ -16,9 +16,26 @@ const Map<String, String> tradeReasonHints = <String, String>{
   'order_not_ended': 'the order is still open: resume it from Open orders',
 };
 
-/// The parts that are present, joined with ` · `.
+/// The Crypto tab's hints, word for word as the other examples show them.
+const Map<String, String> cryptoReasonHints = <String, String>{
+  'invalid_address': 'the recipient is not an address of that network',
+  'recipient_is_account': 'the recipient is the main account itself',
+  'insufficient_funds': 'the main account cannot cover the send',
+  'quote_expired': 'get a new quote',
+  'quote_mismatch': "the quote is not this send's",
+  'over_limit': 'try a smaller amount',
+  'amount_too_small': 'try a larger amount',
+  'bridge_unavailable': 'the bridge is unavailable: try again later',
+  'rhino_key_missing': 'the company has no rhino.fi key',
+  'deposit_unavailable': 'no deposit network is left: ask again later',
+  'signer_mismatch': 'the key does not own this account',
+  'token_unavailable': 'sign in again',
+};
+
+/// The parts that are present, joined with ` · `. [hints] defaults to the Trade tab's.
 String tradeErrorParts({
   required String reason,
+  Map<String, String> hints = tradeReasonHints,
   String? step,
   String? routeReason,
   String? detailKey,
@@ -26,7 +43,7 @@ String tradeErrorParts({
   String? entryPointCode,
 }) {
   final String route = <String>[?routeReason, ?detailKey].join(' / ');
-  final String? hint = tradeReasonHints[reason];
+  final String? hint = hints[reason];
   return <String>[
     reason,
     if (hint != null) '($hint)',
@@ -41,6 +58,15 @@ String tradeErrorParts({
 String tradeErrorLine(Object error) => switch (error) {
       WirexTradeError() => tradeErrorParts(
           reason: error.reason,
+          step: error.step?.wire,
+          routeReason: error.routeReason,
+          detailKey: error.detailKey,
+          httpStatus: error.httpStatus,
+          entryPointCode: error.entryPointCode,
+        ),
+      WirexCryptoError() => tradeErrorParts(
+          reason: error.reason,
+          hints: cryptoReasonHints,
           step: error.step?.wire,
           routeReason: error.routeReason,
           detailKey: error.detailKey,

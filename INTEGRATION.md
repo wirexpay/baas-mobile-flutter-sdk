@@ -20,6 +20,7 @@ Your app supplies two things:
 | 3-D Secure | **no** | Renders the issuer challenge for a card payment and reports the outcome. |
 | Wallet | yes | Embeds the Wirex-hosted Apple Pay / Google Pay checkout for a backend-priced top-up. |
 | Trade | yes, and a signer | Buys and sells stocks and coins from the user's account. Your app signs each step in the user's wallet. |
+| Crypto | yes, and a signer | Sends stablecoins from the user's account over any rail, and gives its deposit addresses. |
 
 :::diagram model Apple/Google Pay
 
@@ -410,7 +411,71 @@ Errors are `WirexTradeError`. Its `reason` is one name from the contract's list,
 | `quote_required` | Pass the order's quote to `resume` |
 | `token_unavailable`, `signer_failed` | Your provider or signer threw. Nothing was sent |
 
-## 9. Appearance, strings and sizing
+## 9. Crypto {creds}
+
+`WirexCrypto` sends from the user's main account to an address on another network or the same one. It also gives the account's deposit addresses. The native engine picks the rail, prices it and runs every step. It takes the same token provider and signer as `Trade`, so one of each serves both. `Crypto` ships in the release after 0.3.15; see `CHANGELOG.md`.
+
+```dart
+import 'package:wirex_mobile_sdk/wirex_mobile_sdk.dart';
+
+Future<WirexSendResult> sendUsdc(WirexTradeTokenProvider tokens, WirexTradeSigner signer, String to) async {
+  final WirexCrypto crypto = await WirexCrypto.create(chainId: '<chain id>', tokenProvider: tokens, signer: signer);
+  try {
+    final WirexSendQuote quote = await crypto.quoteSend(
+      to: to,
+      network: 'ETHEREUM',
+      token: 'USDC',
+      amount: '5.25',                                               // what arrives; the fee comes on top
+    );
+    final WirexSendResult result = await crypto.send(quote, onStep: (WirexCryptoStepEvent event) {});
+    if (result.rail != WirexSendRail.transfer) {
+      final WirexSendStatus status = await crypto.sendStatus(result);
+      _showDelivery(status.state);                                  // call again while on_its_way
+    }
+    return result;                                                  // keep quote and result to resume and check
+  } finally {
+    await crypto.dispose();
+  }
+}
+
+Future<WirexDepositAddress> evmDepositAddress(WirexCrypto crypto) => crypto.depositAddress(family: 'EVM');
+
+void _showDelivery(WirexDeliveryState state) {}
+```
+
+| Member | What it does |
+|---|---|
+| `balances()` | Reads the main account's balances: token, symbol, units and decimals |
+| `quoteSend({to, network, token, amount, provider})` | Checks the recipient, picks the rail and prices it. `amount` is the decimal text of what arrives, such as `5.25`. `provider` forces `cctp`, `rhino` or `across` |
+| `send(quote, {onStep})` | Runs the quote's `request`, then its execute once it is due, and answers a `WirexSendResult` |
+| `resumeSend(sendId, quote, {onStep})` | Carries a send on from where the chain says it stands. It needs the send's own quote |
+| `sendStatus(result)` | Reads the delivery once: `delivered`, `on_its_way`, `not_delivered` or `unknown` |
+| `pendingSends()` | Lists the requests that have not run or expired |
+| `depositAddress({family})` | Gives the account's address for `EVM`, `TRX`, `SOL`, `XLM` or `BTC`, with each network's tokens and limits |
+| `dispose()` | Stops this instance's calls. A later call throws a `StateError`, and `resumeSend` carries on what was sent |
+
+- **Networks.** `network` is `ARC`, `BASE`, `ETHEREUM`, `ARBITRUM`, `OPTIMISM`, `AVALANCHE`, `MATIC_POS`, `BINANCE`, `TRON` or `SOLANA`. To another network the token is `USDC` or `USDT`. On the account's own chain it is any `Regular` token of the chain, by a direct `transfer`.
+- **The rail.** Across competes with one other rail: CCTP where it carries the token there, otherwise rhino.fi. The cheaper wins, and Across wins a tie.
+- **What pays.** The quote fixes it. The synthetic, such as WUSD, pays while it covers the amount and the fee, and is unwrapped first. Otherwise the token itself pays.
+- **The owner check.** Before the first signature of `send` and of `resumeSend`, the engine checks that the signer owns the main account. Otherwise it fails with `signer_mismatch`, and nothing is signed.
+- **Keep the quote.** The engine keeps nothing. Keep each quote and its `sendId`, and after a send its result. `pendingSends()` rows carry no `sendId`: a held quote finds its row when its `requestHash` equals the row's `hash`, in lower case.
+- **Deposit addresses.** The engine reads the account's saved address of the family first. Otherwise it makes one with rhino.fi, saves it and activates it. A rhino.fi failure never fails the call: it leaves a network out.
+
+Errors are `WirexCryptoError`, with the same fields as `WirexTradeError` and `sendId` in place of `orderId`. It never carries an amount, an address or a hash.
+
+| Reason | What to do |
+|---|---|
+| `invalid_address` | The recipient is not an address of that network |
+| `recipient_is_account` | The recipient is the main account itself. Send elsewhere |
+| `insufficient_funds` | The main account cannot cover the send, the fee included |
+| `quote_expired` | Get a new quote |
+| `quote_mismatch` | The quote is not this send's |
+| `over_limit`, `amount_too_small` | Try a smaller or a larger amount |
+| `bridge_unavailable` | The bridge is unavailable. Try again later |
+| `rhino_key_missing` | The company has no rhino.fi key |
+| `deposit_unavailable` | No deposit network is left. Ask again later |
+
+## 10. Appearance, strings and sizing
 
 Every surface takes an appearance object and a strings object. The SDK ships no copy, so your app supplies every word the views draw.
 
@@ -449,7 +514,7 @@ const WirexWalletBranding walletBranding = WirexWalletBranding(logo: WirexWallet
 - Wallet: `appearance` passes CSS variables to the frame; `buttons` sets the Apple Pay `style`/`type` and Google Pay `color`/`type`; `branding` sets the logo (`WirexWalletLogo.wirex()`, `hidden()`, `custom(dataUri)`), the processing disclosure and a privacy URL; `strings` is a `Map<SpecWalletStringKey, String>` overriding the 11 labels of the checkout.
 - **Sizing.** Reveal rows and the collect form size themselves from the native content; the wallet emits a `WirexWalletCheckoutNaturalHeight` event and exposes `controller.naturalHeight`. Apply those heights instead of hardcoding them.
 
-## 10. Logging, timeouts and errors
+## 11. Logging, timeouts and errors
 
 ```dart
 import 'package:wirex_mobile_sdk/wirex_mobile_sdk.dart';
@@ -484,7 +549,7 @@ Future<WirexWalletEnvironment?> safeResolve(String name) async {
 - `WirexDeclined` is the one shared sentinel: the user said no, and nothing was sent.
 - An unknown wallet environment name throws `WirexWalletEnvironmentUnavailable`; an empty `chainId` on the card surfaces fails `configure` with an `invalid_environment` platform error. Show the reason; never fall back to another environment.
 
-## 11. Your backend
+## 12. Your backend
 
 The SDK makes none of these calls. Your backend performs them with the partner credentials Wirex issued, and the app passes the results in:
 
@@ -495,11 +560,11 @@ The SDK makes none of these calls. Your backend performs them with the partner c
 
 Authenticated calls carry `Authorization: Bearer`, `X-Chain-Id` and one identity header (`X-User-Email` or `X-User-Wallet`, never both). For exact paths and payloads see the Wirex BaaS API reference provided with your integration.
 
-## 12. The example app
+## 13. The example app
 
-[`example/`](example/) is a Flutter app that exercises all four surfaces against your own data; nothing is compiled in. Run `flutter pub get` and `flutter run`; it resolves the SDK from pub.dev. The **Config** tab is a per-field editor for the environment, the integration parameters (chain id, identity, card id, cardholder name) and the secrets (bearer, step-up action token); values live in memory only, and every screen reads them live. The **Wallet** screen takes an estimation id and the provider block, and its **Fetch estimate** button prices a top-up through the BaaS API with your bearer, so you can get a real estimation id without standing up a backend. The **Trade** tab runs a stock or coin trade signed by a test user's key; [`example/README.md`](example/README.md) says how to run it. The **Appearance** tab restyles every sealed surface at once. The field list is in [`PARTNER-CONFIG.md`](PARTNER-CONFIG.md). Reveal values render blank on the iOS Simulator and the Pay sheet needs a real device.
+[`example/`](example/) is a Flutter app that exercises all four surfaces against your own data; nothing is compiled in. Run `flutter pub get` and `flutter run`; it resolves the SDK from pub.dev. The **Config** tab is a per-field editor for the environment, the integration parameters (chain id, identity, card id, cardholder name) and the secrets (bearer, step-up action token); values live in memory only, and every screen reads them live. The **Wallet** screen takes an estimation id and the provider block, and its **Fetch estimate** button prices a top-up through the BaaS API with your bearer, so you can get a real estimation id without standing up a backend. The **Trade** and **Crypto** tabs run a trade or a send signed by a test user's key; [`example/README.md`](example/README.md) says how to run it. The **Appearance** tab restyles every sealed surface at once. The field list is in [`PARTNER-CONFIG.md`](PARTNER-CONFIG.md). Reveal values render blank on the iOS Simulator and the Pay sheet needs a real device.
 
-## 13. Patterns from a production integration
+## 14. Patterns from a production integration
 
 The SDK ships inside a production cardholder app built on the same BaaS API. The patterns below are not required by the API; they are what that integration settled on, with the app-specific parts removed.
 
@@ -687,7 +752,7 @@ TabOutcome readReturn(String? url, String returnUrl, WirexWalletQuote quote) {
 - **A failed mint is not fatal in-app.** Run legacy mode instead: the frame tokenizes and your backend executes. Keep `debug` off outside development builds.
 - **Custom Tab is the partner path for Google Pay on Android** when your own WebView cannot complete it. Use an **https App Link** as `returnUrl` (a custom scheme can be claimed by any installed app), open the URL in a Custom Tab, and treat every ending that is not `completed`, `pending` or `failed` as unknown: Android cannot close the tab for you, and a closed tab says nothing about the payment. A Custom Tab needs token mode; there is nobody to hand a wallet token to.
 
-## 14. Troubleshooting
+## 15. Troubleshooting
 
 - **A revealed field is blank.** iOS Simulator (secure layer), or the row was given a box shorter than its content.
 - **`configure` fails with `invalid_environment`.** This build has no endpoints for that side, or `chainId` is empty.
@@ -698,3 +763,4 @@ TabOutcome readReturn(String? url, String returnUrl, WirexWalletQuote quote) {
 - **Both `userEmail` and `userWallet` are set.** The backend answers `400`. Return exactly one.
 - **A trade fails with `token_unavailable`.** Your `WirexTradeTokenProvider` threw or answered an empty token.
 - **A trade fails with `signer_mismatch`.** The signer's address is not the owner of the user's main account.
+- **A send's `Resume` has nothing to resume with.** `resumeSend` needs the send's own quote. Keep each quote until its send ends.

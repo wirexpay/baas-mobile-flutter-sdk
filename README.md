@@ -11,6 +11,8 @@ cross the Dart bridge.
   Pay.
 - **Trade** (`WirexTrade`) buys and sells stocks and coins from the user's account. Your app
   supplies the bearer and signs each step in the user's wallet; the key never crosses the bridge.
+- **Crypto** (`WirexCrypto`) sends stablecoins from the user's account to an address on another
+  network or the same one, and gives the account's deposit addresses. It signs the same way as Trade.
 
 Use of the SDK requires an agreement with Wirex. See [LICENSE](LICENSE).
 
@@ -50,6 +52,7 @@ address. The SDK asks for a token when it needs one.
 
 `Trade` takes its own two: a `WirexTradeTokenProvider` for the bearer and a `WirexTradeSigner`. The
 signer answers the owner's address and signs each 32-byte hash per EIP-191 in the user's wallet.
+`Crypto` takes the same two, so one token provider and one signer serve both.
 
 ## Documentation
 
